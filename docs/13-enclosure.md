@@ -115,7 +115,7 @@ to let the front hang. Normal updates go over Wi-Fi (OTA).
 | `pocket_*`, `psu_*`, `relay_*`, `term_*` | see file | Your actual modules (measure them) |
 | `sensor` | `TO92` | `probe6` for a 6 mm stainless probe |
 | `usb_slot`, `usb_slot_y` | off, −9.3 | Only after checking where the USB-C sits on your board |
-| `ldr_hole`, `ldr_pos` | off | If you want auto-brightness, after locating the LDR |
+| `ldr_hole`, `ldr_pos` | off | **Turn on for auto-brightness / light logging** (firmware ≥ 0.2), after checking the LDR position on the real board |
 | `part` | `assembly` | `exploded`, `section`, `front`, `base`, `*_print`, `fit_test` |
 
 ## Mains safety rules (designed in)

@@ -22,7 +22,12 @@ static void runScenario(const GoldenScenario& sc, uint32_t now0) {
     p.offset_min_learn_s = 1e9;        // no base sensor in the simulator
     Controller c;
     WeekSchedule ws = WeekSchedule::makeDefault();   // Comfort 06:30-22:30
-    c.begin(now0, p, ws, PersistentState{}, sc.schedule ? Mode::Auto : Mode::Comfort, /*start_unlocked=*/true);
+    p.sp_away = 7.0;
+    p.recovery_arrival = Recovery::Efficient;   // ARRIVO: forced start, then pulse-only recovery
+    p.arrival_force_min = 60;
+    p.arrival_stop_c = 2.0;
+    const Mode m0 = sc.arrive_tick >= 0 ? Mode::Away : (sc.schedule ? Mode::Auto : Mode::Comfort);
+    c.begin(now0, p, ws, PersistentState{}, m0, /*start_unlocked=*/true);
 
     int u_fail = 0, v_fail = 0, sp_fail = 0, first_bad = -1;
     double max_du = 0.0;
@@ -37,6 +42,7 @@ static void runScenario(const GoldenScenario& sc, uint32_t now0) {
         in.wall.wday = static_cast<uint8_t>(in.wall.day_number % 7u);
         in.wall.minute = static_cast<uint16_t>((t_s / 60u) % 1440u);
         c.onRoomSample(now, g.meas100 / 100.0, -1.0);
+        if (k == sc.arrive_tick) c.arrive();
         const bool open = c.update(in);
         const Status& st = c.status();
         const double du = std::fabs(st.u - g.u);

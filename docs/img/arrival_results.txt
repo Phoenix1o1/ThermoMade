@@ -1,0 +1,69 @@
+
+=== ARRIVAL at 17:00, house at 7 C, T_out mean -8 C (+-5), hold 20 C, 48 h (learned duty I = 0.183) ===
+ strategy        T1h        T3h        T6h      t16_h      t18_h  deficit_Ch    billed6   billed48  overshoot    extra48
+  classic      10.33      11.77      13.55      11.32      15.93       74.69        359       1761       0.76        803
+     fast      10.33      11.77      13.55      11.32      15.93       74.69        359       1570       0.29        612
+efficient       9.46      10.55      11.84      18.20      23.57       94.52        135        958       0.19          0
+force_eff:15       9.52      10.59      11.92      18.02      23.48       93.63        144        964       0.17          6
+force_eff:30       9.60      10.61      11.98      17.98      23.45       92.95        153        978       0.18         20
+force_eff:60      10.33      10.72      12.05      17.83      23.30       91.66        171        989       0.17         31
+force_eff:90      10.33      10.87      12.09      17.67      23.13       90.41        189       1007       0.17         49
+force_eff:120      10.33      10.95      12.19      17.50      22.97       89.22        209       1022       0.17         64
+force_eff:180      10.33      11.77      12.40      17.17      22.65       86.95        246       1052       0.17         94
+force_eff:240      10.33      11.77      12.54      16.83      22.42       84.87        284       1085       0.17        127
+until_eff:4      10.33      11.77      13.55      13.55      19.83       75.02        359       1309       0.17        351
+until_eff:2      10.33      11.77      13.55      11.32      15.93       74.69        359       1448       0.17        490
+
+=== ARRIVAL at 17:00, house at 7 C, T_out mean -2 C (+-5), hold 20 C, 48 h (learned duty I = 0.067) ===
+ strategy        T1h        T3h        T6h      t16_h      t18_h  deficit_Ch    billed6   billed48  overshoot    extra48
+  classic      10.75      12.37      14.39       8.90      12.95       64.93        359       1427       0.98        677
+     fast      10.75      12.37      14.39       8.90      12.95       64.93        359       1261       0.30        511
+efficient       9.88      11.16      12.70      14.20      18.88       84.43        135        750       0.25          0
+force_eff:15       9.94      11.20      12.78      14.13      18.82       83.55        144        756       0.25          6
+force_eff:30      10.02      11.22      12.84      14.00      18.78       82.88        153        762       0.25         12
+force_eff:60      10.75      11.33      12.91      13.83      18.63       81.59        171        780       0.25         30
+force_eff:90      10.75      11.47      12.95      13.67      18.48       80.36        189        795       0.25         45
+force_eff:120      10.75      11.56      13.05      13.50      18.42       79.17        209        813       0.25         63
+force_eff:180      10.75      12.37      13.26      13.15      18.10       76.94        246        843       0.25         93
+force_eff:240      10.75      12.37      13.40      12.72      17.78       74.89        284        876       0.25        126
+until_eff:4      10.75      12.37      14.39       8.90      16.27       67.35        359       1036       0.25        286
+until_eff:2      10.75      12.37      14.39       8.90      12.95       64.93        359       1162       0.25        412
+
+=== ARRIVAL at 17:00, house at 7 C, T_out mean +4 C (+-5), hold 20 C, 48 h (learned duty I = 0.000) ===
+ strategy        T1h        T3h        T6h      t16_h      t18_h  deficit_Ch    billed6   billed48  overshoot    extra48
+  classic      11.16      12.96      15.22       7.18      10.58       55.16        359       1156       1.20        559
+     fast      11.16      12.96      15.22       7.18      10.58       55.22        359       1020       0.49        423
+efficient      10.30      11.77      13.57      11.02      15.40       74.35        135        597       0.49          0
+force_eff:15      10.37      11.81      13.64      10.93      15.33       73.46        144        603       0.49          6
+force_eff:30      10.44      11.83      13.70      10.80      15.22       72.80        153        612       0.49         15
+force_eff:60      11.16      11.94      13.77      10.63      15.15       71.52        171        627       0.49         30
+force_eff:90      11.16      12.08      13.81      10.47      14.98       70.30        189        645       0.49         48
+force_eff:120      11.16      12.16      13.91      10.30      14.83       69.13        209        660       0.48         63
+force_eff:180      11.16      12.96      14.11       9.97      14.52       66.92        246        693       0.48         96
+force_eff:240      11.16      12.96      14.25       9.63      14.28       64.90        284        726       0.49        129
+until_eff:4      11.16      12.96      15.22       7.18      13.20       59.67        359        829       0.49        232
+until_eff:2      11.16      12.96      15.22       7.18      10.58       55.97        359        941       0.48        344
+
+=== PLANNED RETURN vs ARRIVING COLD, T_out mean -8 C: window = 24 h before to 48 h after arrival (17:00) ===
+     plan  T_arrival        T3h        T6h  deficit_Ch  billed_before  billed_total      extra
+cold arrival, efficient       7.81      11.01      12.24       89.39             87          1031          0
+cold arrival, efficient, force 60'       7.81      11.18      12.44       86.69             87          1063         32
+cold arrival, fast       7.81      12.21      13.94       69.86             87          1598        567
+start 6 h before, efficient      12.42      13.80      14.76       58.51            204          1062         31
+start 12 h before, efficient      14.65      15.84      16.59       36.22            316          1110         79
+start 18 h before, efficient      16.50      17.49      18.11       18.08            426          1167        136
+start 24 h before, efficient      18.11      18.93      19.43        3.82            540          1228        197
+start 12 h before, fast      17.13      18.53      19.25        7.06            766          1724        693
+
+=== PLANNED RETURN vs ARRIVING COLD, T_out mean -2 C: window = 24 h before to 48 h after arrival (17:00) ===
+     plan  T_arrival        T3h        T6h  deficit_Ch  billed_before  billed_total      extra
+cold arrival, efficient       7.03      11.50      12.99       80.84             48           789          0
+cold arrival, efficient, force 60'       7.03      11.68      13.20       78.02             48           819         30
+cold arrival, fast       7.03      12.69      14.68       61.46             48          1279        490
+start 6 h before, efficient      13.34      14.94      16.11       42.48            177           825         36
+start 12 h before, efficient      16.10      17.44      18.37       15.37            300           870         81
+start 18 h before, efficient      18.24      19.37      19.91        2.07            420           897        108
+start 24 h before, efficient      19.82      20.10      20.01        0.00            536           926        137
+start 12 h before, fast      18.49      19.59      20.11        1.46            750          1296        507
+
+plot written to ../../docs/img/sim_arrival.png

@@ -13,8 +13,8 @@ struct SampleRec {
     float t_ctrl, t_room, rh, t_base, t_base_corr, offset, sp, u, p, i, dew_c;
     uint32_t billed_today_s, pulses_today, node_age_s;
     uint16_t alarms;
-    uint8_t src, mode, period, boost, valve, reason, limp, hum;
-    int8_t rssi;
+    uint8_t src, mode, period, boost, valve, reason, limp, hum, arrival;
+    int8_t rssi, light;
     bool room_ok, base_ok;
 };
 
@@ -39,7 +39,7 @@ char g_last_day[16] = "";
 
 constexpr const char* kSampleHeader =
     "unix,local,uptime_s,t_ctrl,src,t_room,rh,t_base,t_base_corr,offset,sp,mode,period,boost,u,p,i,valve,reason,"
-    "billed_today_s,pulses_today,alarms,limp,humidity,dew_c,rssi,node_age_s\n";
+    "billed_today_s,pulses_today,alarms,limp,humidity,dew_c,rssi,node_age_s,arrival,light_pct\n";
 constexpr const char* kEventHeader = "unix,local,uptime_s,event,a,b,x,y\n";
 
 const char* eventName(tmc::EventType t) {
@@ -55,6 +55,7 @@ const char* eventName(tmc::EventType t) {
         case tmc::EventType::AlarmOff: return "alarm_off";
         case tmc::EventType::DayRollover: return "day";
         case tmc::EventType::Boot: return "boot";
+        case tmc::EventType::Arrival: return "arrival";
     }
     return "?";
 }
@@ -140,7 +141,8 @@ bool write(const LogItem& it) {
             strncpy(g_last_day, day, sizeof g_last_day - 1);
             if (it.unix) housekeeping();
         }
-        char tc[12], tr[12], rh[12], tb[12], tbc[12], dew[12];
+        char tc[12], tr[12], rh[12], tb[12], tbc[12], dew[12], lp[8] = "";
+        if (s.light >= 0) snprintf(lp, sizeof lp, "%d", s.light);
         fmtFloat(tc, sizeof tc, s.t_ctrl, s.src != 0, 2);
         fmtFloat(tr, sizeof tr, s.t_room, s.room_ok, 2);
         fmtFloat(rh, sizeof rh, s.rh, s.rh >= 0.0f, 1);
@@ -148,12 +150,13 @@ bool write(const LogItem& it) {
         fmtFloat(tbc, sizeof tbc, s.t_base_corr, s.base_ok, 2);
         fmtFloat(dew, sizeof dew, s.dew_c, s.rh >= 0.0f, 1);
         snprintf(line, sizeof line,
-                 "%lu,%s,%lu,%s,%u,%s,%s,%s,%s,%.3f,%.2f,%u,%u,%u,%.4f,%.4f,%.4f,%u,%u,%lu,%lu,%u,%u,%u,%s,%d,%ld\n",
+                 "%lu,%s,%lu,%s,%u,%s,%s,%s,%s,%.3f,%.2f,%u,%u,%u,%.4f,%.4f,%.4f,%u,%u,%lu,%lu,%u,%u,%u,%s,%d,%ld,%u,%s\n",
                  static_cast<unsigned long>(it.unix), local, static_cast<unsigned long>(s.uptime_s), tc, s.src, tr, rh,
                  tb, tbc, static_cast<double>(s.offset), static_cast<double>(s.sp), s.mode, s.period, s.boost,
                  static_cast<double>(s.u), static_cast<double>(s.p), static_cast<double>(s.i), s.valve, s.reason,
                  static_cast<unsigned long>(s.billed_today_s), static_cast<unsigned long>(s.pulses_today), s.alarms,
-                 s.limp, s.hum, dew, s.rssi, s.node_age_s == UINT32_MAX ? -1L : static_cast<long>(s.node_age_s));
+                 s.limp, s.hum, dew, s.rssi, s.node_age_s == UINT32_MAX ? -1L : static_cast<long>(s.node_age_s),
+                 s.arrival, lp);
         char path[40];
         snprintf(path, sizeof path, "/log/%s.csv", day);
         return appendLine(path, kSampleHeader, line);
@@ -235,6 +238,8 @@ void sample(const Snapshot& snap) {
     s.dew_c = static_cast<float>(st.dew_point_c);
     s.rssi = snap.node_rssi;
     s.node_age_s = snap.node_age_s;
+    s.arrival = st.arrival ? 1 : 0;
+    s.light = snap.light_pct;
     post(it);
 }
 

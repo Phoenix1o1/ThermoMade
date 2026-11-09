@@ -6,9 +6,11 @@ valve and fuses its own temperature sensor with a **wireless room node** (which 
 clock). A small **Android app** lets the family control it over the house's own Wi-Fi. Fully
 offline: no internet on site. Bathroom/outdoor sensors can be added later.
 
-> Status: **firmware v0.1 written** (base CYD + room node + 42 native tests), compiles, not yet
-> run on hardware. Next: bench bring-up ([firmware/README.md](firmware/README.md)), decisions
-> D13 (neutral in the 503 box?) and D18 (relay module type).
+> Status: **firmware written** (base CYD v0.2 + room node v0.1 + 46 native tests), compiles, not
+> yet run on hardware. Base v0.2: ARRIVO button (60 min forced heating, chosen by simulation),
+> 8 hidden settings pages incl. manual date/time, LDR light sensing. Next: bench bring-up
+> ([firmware/README.md](firmware/README.md)), decisions D13 (neutral in the 503 box?), D18 (relay
+> module type), D23 (planned return).
 
 ## The idea in one paragraph
 
@@ -64,7 +66,8 @@ flowchart LR
 
 ```
 docs/               plan & knowledge base (start here)
-tools/sim/          Python thermal simulator (design tool)
+tools/sim/          Python thermal simulator (design tool) + arrival_study.py
+tools/ui_preview/   renders the CYD screens on a PC from the real firmware UI code
 reference/legacy/   old single-board sketch, kept for reference
 firmware/           PlatformIO monorepo: base (CYD), room node, libraries, tests
 android/            parents' app (Phase 3)

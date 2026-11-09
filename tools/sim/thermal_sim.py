@@ -189,6 +189,45 @@ class TermoMade:
         return self.on
 
 
+class ForcedStart:
+    """Arrival in a cold house ("ARRIVO" button): force the valve open for force_s seconds, or
+    until the measured room reaches sp - stop_c (whichever comes first), then hand over to the
+    wrapped TermoMade controller. Mirrors tmc::Controller::arrive() (a boost with an early stop).
+    sp_before = setpoint before arrival (antifreeze), so the hand-over is seen as a setpoint
+    rise and the arrival recovery mode (fast / efficient) applies."""
+
+    def __init__(self, inner, force_s, stop_c=None, sp_before=7.0):
+        self.inner, self.name = inner, inner.name
+        self.force_s, self.stop_c = force_s, stop_c
+        self.elapsed = 0.0
+        self.forcing = force_s > 0
+        inner.last_sp = sp_before
+
+    @property
+    def u(self):
+        return 1.0 if self.forcing else getattr(self.inner, "u", float("nan"))
+
+    def tick(self, sp, t_meas, dt):
+        if self.forcing:
+            self.elapsed += dt
+            done = self.elapsed > self.force_s or (self.stop_c is not None and t_meas >= sp - self.stop_c)
+            if not done:
+                inn = self.inner
+                if inn.on:
+                    inn.t_state += dt
+                elif inn.t_state + dt >= inn.mod.off_min:   # OFF_MIN is absolute, even when forcing
+                    inn.on, inn.t_state = True, 0.0
+                else:
+                    inn.t_state += dt
+                if inn.last_sp is not None and sp > inn.last_sp + 0.05:
+                    inn.recovering = True
+                inn.last_sp = sp
+                inn.pid.mf = None          # filter restarts from the current reading at hand-over
+                return inn.on
+            self.forcing = False
+        return self.inner.tick(sp, t_meas, dt)
+
+
 class Schedule:
     """Wraps a controller and replaces the setpoint with a daily program."""
 
@@ -211,7 +250,8 @@ class Schedule:
 
 
 def simulate(ctrl, days=4.0, sp=20.0, T_out_mean=-2.0, T_out_amp=5.0, T0_air=None, T0_mass=None,
-             eval_from_h=24.0, dt=5.0, ts=30.0, seed=1, record=False, p=PLANT):
+             eval_from_h=24.0, dt=5.0, ts=30.0, seed=1, record=False, p=PLANT, t0_h=0.0):
+    """t0_h = local hour of day at t = 0 (outdoor minimum at 03:00)."""
     rnd = random.Random(seed)
     N = p["n_seg"]
     C_seg = (p["rad_water_l"] * CP_W + p["rad_metal_kJK"] * 1000) / N
@@ -220,7 +260,7 @@ def simulate(ctrl, days=4.0, sp=20.0, T_out_mean=-2.0, T_out_amp=5.0, T0_air=Non
     C_air, C_mass = p["C_air_kJK"] * 1000, p["C_mass_kJK"] * 1000
 
     def t_out(t):
-        return T_out_mean - T_out_amp * math.cos(2 * math.pi * (t / 3600 - 3) / 24)  # min at 03:00
+        return T_out_mean - T_out_amp * math.cos(2 * math.pi * (t / 3600 + t0_h - 3) / 24)  # min at 03:00
 
     if T0_air is None:
         T0_air = sp

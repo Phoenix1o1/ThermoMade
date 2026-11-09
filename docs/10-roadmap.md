@@ -16,6 +16,8 @@
 | D9 | Toolchain | **PlatformIO + pioarduino** (core 3.3.12 / IDF 5.5), native unit tests |
 | D19 | Room sensor | **Both, selectable at build time:** SHT4x (`node_sht4x`, recommended) or DHT22 (`node_dht22`). DHT11 not supported (1 °C steps) |
 | D20 | CYD local sensor | **DS18B20** on GPIO 27 (1-Wire) |
+| D22 | Arrival at the cold house | **ARRIVO button: AUTO + valve forced open 60 min (stops within 2 °C of the setpoint), then efficient pulse recovery.** Chosen from `tools/sim/arrival_study.py` ([04 §5.1](04-control-algorithm.md#51-arrivo-arriving-at-the-cold-house-decided-2026-11-09-with-toolssimarrival_studypy)). Continuous heating until warm would cost ~8.5 billed hours more per arrival |
+| D24 | Light sensing | **CYD's own LDR** (GPIO 34), sampled with the screen dark, self-learning scale → auto-brightness + log. No extra sensor (a BH1750 on the room node only if calibrated lux is ever needed) |
 | — | Extra requirements | Night setback schedule, Android app for the parents, screen off after 30 s, 2-part OpenSCAD box on the 503 box with PSU inside |
 
 ### Still open
@@ -33,6 +35,8 @@
 | D17 | Parents' phones: Android version? | App needs Android 10+ | Android 10+ |
 | **D18** | **Relay module input: active-HIGH or active-LOW?** | Build flag `TM_RELAY_ACTIVE_HIGH` and the pull resistor must match the module ([05](05-hardware.md#relay-module-input-which-kind-decision-d18-open)) | Active-HIGH + 10 kΩ pull-down (flag = 1, as committed) |
 | D21 | Touch calibration / panel colours of this CYD | Defaults are typical values | Check on first boot (colour test, `touch on`, `cal`) |
+| **D23** | **Planned return ("VIA fino al …")?** Heat 18 h before arriving: arrive at ~18 °C for ~+1.8 billed hours, vs cold arrival (ARRIVO) or ~6.4 h less than heating flat out on arrival ([04 §5.1](04-control-algorithm.md#51-arrivo-arriving-at-the-cold-house-decided-2026-11-09-with-toolssimarrival_studypy)) | Comfort on arrival vs a little cost; return date must be set before leaving (no internet) | Not built; ARRIVO only |
+| D25 | LDR hole in the front of the box | Light sensing needs it (`ldr_hole`, position to verify on the real board) | Off until the position is checked |
 
 ## Phases
 
@@ -57,13 +61,16 @@
 
 ### Phase 2 — MVP (control works in the house)
 
-- [x] `tm_protocol`, `tm_control`, `tm_util` libraries + native unit tests (42 tests incl. hard-rule
+- [x] `tm_protocol`, `tm_control`, `tm_util` libraries + native unit tests (46 tests incl. hard-rule
       fuzz tests and golden vectors from the simulator)
 - [x] Room node firmware v0.1 (telemetry, RTC, ACK, pairing, LED, SHT4x or DHT22) — compiles, not yet on hardware
 - [x] Base v0.1: control task, valve FSM, PI + modulator, sensor fusion + learned offset, LIMP,
       NVS with CRC, watchdogs, time from node RTC / console, schedule with efficient recovery,
       humidity advice — compiles, not yet on hardware
 - [x] Base UI v0.1: Home (Italian), screen off after 30 s, Diagnostics, serial console
+- [x] Base v0.2: **ARRIVO** button (D22, decided by simulation), **8 hidden settings pages**
+      (status, manual date/time, temperatures, schedule, sensors, screen, all parameters, system),
+      **LDR light sensing** + auto-brightness, screens rendered on the PC by `tools/ui_preview`
 - [x] Logging v0.1: SD per-minute CSV + events (RAM buffer and daily summary: later)
 - [ ] **Bring-up on the bench** ([firmware/README.md](../firmware/README.md)): colour test, touch
       calibration, relay stays off through reset/flash, DS18B20, pairing, 24 h soak with a lamp or
@@ -82,7 +89,7 @@
 - [ ] Web pages: simple (parents) + advanced; JSON API; CSV download; OTA
 - [ ] **Android app v1** ([12](12-android-app.md)) + GitHub Actions APK build, installed on the parents' phones
 - [ ] All CYD screens (Graph, Stats, Schedule, Sensors, Settings), buzzer
-- [ ] Modes: Away until date, Boost, plant hours; fixed 1 h pre-heat
+- [ ] Modes: Away until date (D23), plant hours. (Boost, ARRIVO and the fixed 1 h pre-heat are done)
 
 ### Phase 4 — Extensions
 

@@ -58,6 +58,10 @@ void Controller::setMode(Mode m) {
     prev_mode_ = mode_;
     mode_ = m;
     override_active_ = false;
+    if (arrival_ && m != Mode::Auto) {   // any other mode choice cancels the forced start
+        arrival_ = false;
+        pushEvent(EventType::Arrival, 0);
+    }
     pending_cause_ = (prev_mode_ == Mode::Away || prev_mode_ == Mode::Off) ? Cause::Arrival : Cause::User;
     pushEvent(EventType::ModeChange, static_cast<uint8_t>(m), static_cast<uint8_t>(prev_mode_));
 }
@@ -92,7 +96,21 @@ void Controller::startBoost(uint16_t minutes) {
     boost_until_ms_ = uptime_ms_ + static_cast<uint64_t>(minutes) * 60000u;
 }
 
-void Controller::stopBoost() { boost_ = false; }
+void Controller::stopBoost() {
+    boost_ = false;
+    if (arrival_) {
+        arrival_ = false;
+        pushEvent(EventType::Arrival, 0);
+    }
+}
+
+void Controller::arrive() {
+    if (mode_ != Mode::Auto) setMode(Mode::Auto);   // from AWAY/OFF: pending cause = Arrival
+    else pending_cause_ = Cause::Arrival;
+    if (p_.arrival_force_min == 0) return;
+    arrival_ = true;
+    arrival_started_ = false;   // the forced time is counted from the next update
+}
 
 Controller::Resolved Controller::resolve(const WallTime& wall) {
     Resolved r{true, p_.sp_comfort, Period::Comfort, false, false};
@@ -155,6 +173,19 @@ bool Controller::update(const ControllerInputs& in) {
     // ---- setpoint ----
     const Resolved r = resolve(in.wall);
     if (boost_ && uptime_ms_ >= boost_until_ms_) boost_ = false;
+    if (arrival_) {
+        if (!arrival_started_) arrival_until_ms_ = uptime_ms_ + static_cast<uint64_t>(p_.arrival_force_min) * 60000u;
+        // ends after the time, or as soon as the room is close to the setpoint (also right away
+        // if ARRIVO is pressed in a house that is already nearly warm)
+        const bool warm = have_t && T >= r.sp - p_.arrival_stop_c;
+        if (uptime_ms_ >= arrival_until_ms_ || warm || !r.enabled) {
+            arrival_ = false;
+            if (arrival_started_) pushEvent(EventType::Arrival, 0, 0, have_t ? static_cast<float>(T) : 0.0f);
+        } else if (!arrival_started_) {
+            arrival_started_ = true;
+            pushEvent(EventType::Arrival, 1, 0, have_t ? static_cast<float>(T) : 0.0f);
+        }
+    }
 
     // recovery: classify setpoint increases (docs/04 §5)
     if (have_last_sp_ && r.sp > last_sp_ + 0.05) {
@@ -195,13 +226,16 @@ bool Controller::update(const ControllerInputs& in) {
         rq.force_close = true;
         rq.close_reason = ValveReason::PlantOff;
         u_ = 0.0;
-    } else if (boost_) {
+    } else if (boost_ || arrival_) {
+        // forced heating: open as soon as the FSM allows (OFF_MIN is never shortened)
+        const ValveReason why = boost_ ? ValveReason::Boost : ValveReason::Arrival;
         rq.demand = true;
         rq.on_target_ms = kForeverMs;
         rq.off_target_ms = 0;
-        rq.open_reason = ValveReason::Boost;
-        rq.close_reason = ValveReason::Boost;
+        rq.open_reason = why;
+        rq.close_reason = why;
         u_ = 1.0;
+        pid_.resetFilter();   // the PI restarts from the current reading when the forced phase ends
     } else if (!have_t) {
         if (grace) {
             rq.demand = false;
@@ -299,6 +333,8 @@ bool Controller::update(const ControllerInputs& in) {
     st_.override_active = override_active_;
     st_.boost = boost_;
     st_.boost_left_s = boost_ ? static_cast<uint32_t>((boost_until_ms_ - uptime_ms_) / 1000u) : 0;
+    st_.arrival = arrival_;
+    st_.arrival_left_s = arrival_ ? static_cast<uint32_t>((arrival_until_ms_ - uptime_ms_) / 1000u) : 0;
     st_.algo_active = algo;
     st_.recovering = recovering_;
     st_.recovery = recovery_;

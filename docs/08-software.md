@@ -1,8 +1,8 @@
 # 08 — Software stack & repository layout
 
-Status (2026-11-09): **firmware v0.1 written and compiling** for the base (CYD), the room node
-(SHT4x or DHT22 build) and the native unit tests. Not yet run on hardware. Bring-up steps:
-[`firmware/README.md`](../firmware/README.md).
+Status (2026-11-09): **base firmware v0.2, room node v0.1**, compiling, 46 native tests passing.
+Not yet run on hardware. Bring-up steps: [`firmware/README.md`](../firmware/README.md).
+v0.2 adds the ARRIVO button, the hidden settings pages and LDR light sensing.
 
 ## Toolchain (decision D9: PlatformIO)
 
@@ -19,7 +19,7 @@ Status (2026-11-09): **firmware v0.1 written and compiling** for the base (CYD),
 | `node_dht22` | Room node with DHT22/AM2302 (+ DS3231) | `pio run -e node_dht22 -t upload` |
 | `native` | PC unit tests (no hardware) | `pio test -e native` |
 
-Build size (v0.1): base 1.18 MB of the 1.75 MB OTA slot (64 %), RAM 17 %. Node 0.94 MB (72 % of
+Build size: base v0.2 1.20 MB of the 1.75 MB OTA slot (66 %), RAM 17 %. Node 0.94 MB (72 % of
 the default 1.25 MB app partition).
 
 ## Libraries
@@ -52,13 +52,14 @@ firmware/
 │   └── tm_util/              CRC-8, SHT4x decode, DS3231 BCD, civil date <-> days
 ├── src/
 │   ├── base/                 main.cpp (tasks), relay.h, shared.*, settings.*, timekeeper.*,
-│   │                         temp_local.* (DS18B20), radio_base.*, touch.*, ui.*, logger.*,
-│   │                         cli.*, param_table.h, base_config.h (pins, timings)
+│   │                         temp_local.* (DS18B20), radio_base.*, touch.*, ui.* (Home),
+│   │                         ui_menu.* (hidden pages), light.* (LDR), logger.*, cli.*,
+│   │                         param_table.h (names, steps), base_config.h (pins, timings)
 │   └── node/                 main.cpp, sensors.* (SHT4x | DHT22, DS3231), radio.*, node_config.h
 └── test/
-    ├── test_control/         30 tests: modulator, FSM (+ fuzz), PID, fusion, schedule,
-    │                         humidity, controller (+ 20-day fuzz of the hard rules)
-    ├── test_golden/          C++ controller vs Python simulator, 4 scenarios, 18 720 ticks
+    ├── test_control/         34 tests: modulator, FSM (+ fuzz), PID, fusion, schedule,
+    │                         humidity, controller, ARRIVO (+ 20-day fuzz of the hard rules)
+    ├── test_golden/          C++ controller vs Python simulator, 6 scenarios (2 ARRIVO), 23 040 ticks
     ├── test_protocol/        frame sizes, round trip, validation
     └── test_util/            CRC, SHT4x/DS3231 decode, dates
 ```
@@ -66,6 +67,11 @@ firmware/
 `tools/sim/gen_golden.py` regenerates `test/test_golden/golden_data.h` from the simulator. Run
 it (without `python -I`) whenever the simulator or the control spec changes. The golden test
 proves the firmware does exactly what the simulator predicts.
+
+`tools/ui_preview/build.sh` compiles the real `ui.cpp` + `ui_menu.cpp` on the PC against a small
+software stand-in for LovyanGFX (real font data), drives them with scripted touches and writes
+the screens to `docs/img/ui/`. Use it after any UI change: it caught an overlapping label, a
+colour that didn't refresh and a text at the screen edge before any hardware existed.
 
 ## Base firmware task model (FreeRTOS)
 

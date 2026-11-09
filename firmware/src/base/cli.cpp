@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <time.h>
 #include "base_config.h"
+#include "light.h"
 #include "logger.h"
 #include "param_table.h"
 #include "radio_base.h"
@@ -49,11 +50,12 @@ void help() {
         "TermoMade base console\n"
         "  status | params | get <name> | set <name> <value>\n"
         "  mode auto|comfort|night|away|off      sp <degC>      boost <min>|off\n"
+        "  arrive   (ARRIVO: back to AUTO + forced heating, see 'get arrival_force_min')\n"
         "  time YYYY-MM-DD HH:MM[:SS]            (local time, Europe/Rome)\n"
         "  sched | sched default | sched <all|wk|we|mon..sun> HH:MM=C|N [HH:MM=C|N ...]\n"
         "  pair | forget-nodes\n"
         "  touch on|off | cal <xmin> <xmax> <ymin> <ymax> <swap> <invx> <invy>\n"
-        "  screen <timeout_s> [brightness 10-255]\n"
+        "  screen <timeout_s> [max 10-255] [min 1-255] [auto 0/1]\n"
         "  reset-learning duty|offset|all | save | reboot | factory YES");
 }
 
@@ -90,6 +92,7 @@ void status() {
                   st.override_active ? " +override" : "", st.boost ? " +BOOST" : "", st.sp,
                   st.heating_enabled ? "enabled" : "DISABLED");
     if (st.boost) Serial.printf("boost  %lu s left\n", static_cast<unsigned long>(st.boost_left_s));
+    if (st.arrival) Serial.printf("arrive forced heating, %lu s left\n", static_cast<unsigned long>(st.arrival_left_s));
     Serial.printf("temp   %s %.2f  room %s %.2f rh %.1f  base %s %.2f -> %.2f (offset %+.2f, learned %.1f h%s)%s\n",
                   tmc::toString(f.src), f.t_c, f.room_ok ? "ok" : "--", f.t_room, f.rh_room,
                   f.base_ok ? "ok" : "--", f.t_base_raw, f.t_base_corr, f.offset, f.offset_learned_s / 3600.0,
@@ -114,10 +117,13 @@ void status() {
                       s.node_age_s == UINT32_MAX ? -1L : static_cast<long>(s.node_age_s), s.node_rssi);
     else
         Serial.println("node   NOT paired ('pair' then power the node, or hold its BOOT 3 s)");
-    Serial.printf("misc   ds18b20 %s  sd %s  pairing %s  dropped: req %lu log %lu  heap %lu\n",
+    Serial.printf("light  %d %% (raw %u, live %u, range %u bright .. %u dark)  screen %u s, bright %u..%u %s\n",
+                  s.light_pct, s.light_raw, light::rawLive(), light::rangeBright(), light::rangeDark(),
+                  s.cfg.screen_timeout_s, s.cfg.brightness_min, s.cfg.brightness, s.cfg.auto_brightness ? "auto" : "fixed");
+    Serial.printf("misc   ds18b20 %s  sd %s  pairing %s  dropped: req %lu log %lu  heap %lu  reset %s\n",
                   s.ds18b20_present ? "ok" : "MISSING", s.sd_ok ? "ok" : "no", s.pairing_open ? "OPEN" : "closed",
                   static_cast<unsigned long>(s.req_dropped), static_cast<unsigned long>(logger::dropped()),
-                  static_cast<unsigned long>(ESP.getFreeHeap()));
+                  static_cast<unsigned long>(ESP.getFreeHeap()), s.reset_reason);
 }
 
 void printParam(const tmc::ControlParams& p, int i) {
@@ -264,6 +270,11 @@ void execute(char* line) {
         Serial.println("OK (boost never shortens the 5 min valve pause)");
         return;
     }
+    if (!strcmp(cmd, "arrive") || !strcmp(cmd, "arrivo")) {
+        post(ReqType::Arrive);
+        Serial.println("OK ARRIVO: AUTO + forced heating (ends early within arrival_stop_c of the setpoint)");
+        return;
+    }
     if (!strcmp(cmd, "time")) { cmdTime(save); return; }
     if (!strcmp(cmd, "sched")) { cmdSched(save); return; }
     if (!strcmp(cmd, "pair")) { radio_base::openPairing(); Serial.println("OK pairing open for 60 s"); return; }
@@ -292,15 +303,20 @@ void execute(char* line) {
     }
     if (!strcmp(cmd, "screen")) {
         args();
-        long to = 0, br = -1;
-        if (!parseLong(a1, &to) || to < 10 || to > 255 || (a2 && (!parseLong(a2, &br) || br < 10 || br > 255))) {
-            Serial.println("ERR usage: screen <timeout 10-255 s> [brightness 10-255]");
+        const char* a3 = strtok_r(nullptr, " ", &save);
+        const char* a4 = strtok_r(nullptr, " ", &save);
+        long to = 0, mx = -1, mn = -1, au = -1;
+        if (!parseLong(a1, &to) || to < 10 || to > 255 || (a2 && (!parseLong(a2, &mx) || mx < 10 || mx > 255)) ||
+            (a3 && (!parseLong(a3, &mn) || mn < 1 || mn > 255)) || (a4 && (!parseLong(a4, &au) || au < 0 || au > 1))) {
+            Serial.println("ERR usage: screen <timeout 10-255 s> [max 10-255] [min 1-255] [auto 0/1]");
             return;
         }
         Request r;
         r.type = ReqType::SetScreen;
         r.i = static_cast<int32_t>(to);
-        r.v[0] = static_cast<int16_t>(br);
+        r.v[0] = static_cast<int16_t>(mx);
+        r.v[1] = static_cast<int16_t>(mn);
+        r.v[2] = static_cast<int16_t>(au);
         if (shared::postRequest(r)) Serial.println("OK");
         return;
     }

@@ -28,6 +28,41 @@ class Recorder:
         return on
 
 
+class ArrivalRec:
+    """One tick in AWAY (antifreeze 7 C), then ARRIVO: ForcedStart (60 min, stop at sp - 2 C)
+    around the efficient TermoMade controller. Records the effective setpoint, measurement,
+    demand and valve state."""
+    name = "termomade"
+
+    def __init__(self, force_s=3600, stop_c=2.0, sp_away=7.0):
+        self.tm = S.make("termomade", eff=True)
+        self.force_s, self.stop_c, self.sp_away = force_s, stop_c, sp_away
+        self.fs = None
+        self.rows = []
+
+    @property
+    def u(self):
+        return self.fs.u if self.fs else self.tm.u
+
+    def tick(self, sp, meas, dt):
+        if not self.rows:                       # tick 0: still away
+            sp_eff = self.sp_away
+            on = self.tm.tick(sp_eff, meas, dt)
+        else:                                   # ARRIVO pressed before tick 1
+            if self.fs is None:
+                self.fs = S.ForcedStart(self.tm, self.force_s, stop_c=self.stop_c, sp_before=self.sp_away)
+            sp_eff = sp
+            on = self.fs.tick(sp, meas, dt)
+        self.rows.append((sp_eff, meas, self.u, 1 if on else 0))
+        return on
+
+
+def run_arrival(name, days, **kw):
+    rec = ArrivalRec()
+    S.simulate(rec, days=days, eval_from_h=0, **kw)
+    return name, rec.rows, "arrival"
+
+
 def run(name, days, schedule=None, eff=False, **kw):
     inner = S.make("termomade", eff=eff)
     rec = Recorder(inner)
@@ -41,6 +76,8 @@ SCENARIOS = [
     run("cold_arrival", 1.0, T_out_mean=-2.0, T0_air=8.0, T0_mass=8.0),
     run("night_eff_preheat", 2.5, schedule=dict(sp_night=17.0, preheat_h=2.0), eff=True, T_out_mean=-2.0),
     run("mild_fast_night185", 1.5, schedule=dict(sp_night=18.5), eff=False, T_out_mean=8.0),
+    run_arrival("arrival_cold", 1.0, T_out_mean=-2.0, T0_air=9.5, T0_mass=9.0),
+    run_arrival("arrival_warmish", 0.5, T_out_mean=-2.0, T0_air=16.5, T0_mass=16.0),
 ]
 
 
@@ -51,7 +88,7 @@ def main(out):
         f.write("#pragma once\n#include <cstdint>\n\n")
         f.write("struct GoldenRow { int16_t sp100; int16_t meas100; double u; uint8_t open; };\n")
         f.write("struct GoldenScenario { const char* name; const GoldenRow* rows; int n; "
-                "bool schedule; double sp_night; int preheat_min; bool efficient; };\n\n")
+                "bool schedule; double sp_night; int preheat_min; bool efficient; int arrive_tick; };\n\n")
         for name, rows, sch in SCENARIOS:
             f.write(f"static const GoldenRow g_{name}[] = {{\n")
             for sp, meas, u, on in rows:
@@ -60,11 +97,13 @@ def main(out):
         f.write("static const GoldenScenario g_scenarios[] = {\n")
         for name, rows, sch in SCENARIOS:
             eff = "true" if name.startswith("night_eff") else "false"
-            if sch:
+            if sch == "arrival":
+                f.write(f'  {{"{name}", g_{name}, {len(rows)}, false, 0.0, 0, false, 1}},\n')
+            elif sch:
                 f.write(f'  {{"{name}", g_{name}, {len(rows)}, true, {sch["sp_night"]}, '
-                        f'{int(round(sch.get("preheat_h", 0.0) * 60))}, {eff}}},\n')
+                        f'{int(round(sch.get("preheat_h", 0.0) * 60))}, {eff}, -1}},\n')
             else:
-                f.write(f'  {{"{name}", g_{name}, {len(rows)}, false, 0.0, 0, false}},\n')
+                f.write(f'  {{"{name}", g_{name}, {len(rows)}, false, 0.0, 0, false, -1}},\n')
         f.write("};\n")
     total = sum(len(r) for _, r, _ in SCENARIOS)
     opens = sum(sum(1 for i in range(1, len(r)) if r[i][3] and not r[i-1][3]) for _, r, _ in SCENARIOS)

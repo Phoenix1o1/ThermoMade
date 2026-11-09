@@ -160,8 +160,8 @@ styles:
 
 | Recovery | Rule | Default for |
 |---|---|---|
-| **EFFICIENT** | After a setpoint increase, `u_max = uc` (pulse-frequency only, never longer pulses or continuous) until the room is within 0.3 °C. Combined with **optimum start** (begin earlier) | Scheduled Night → Comfort |
-| **FAST** | `u_max = 1` (continuous allowed) | Away → Comfort (arrival), BOOST button |
+| **EFFICIENT** | After a setpoint increase, `u_max = uc` (pulse-frequency only, never longer pulses or continuous) until the room is within 0.3 °C. Combined with **optimum start** (begin earlier) | Scheduled Night → Comfort; **arrival after the ARRIVO forced hour** (changed 2026-11-09, see below) |
+| **FAST** | `u_max = 1` (continuous allowed) | +/− and manual mode changes (`recovery_user`), BOOST button |
 
 Night setback simulation (Comfort 20 °C 06:30–22:30, outdoor −2 °C; `tools/sim`, section NIGHT
 SETBACK):
@@ -183,6 +183,63 @@ plan: Night = 18.5 °C, EFFICIENT recovery, optimum start. If cooler nights matt
 cost, go to 17 °C and accept ≈ +20 %. Real data will tell: log both for a week each.
 
 The **BOOST** button is a user override (timed continuous ON) and does not touch `I`.
+
+### 5.1 ARRIVO: arriving at the cold house (decided 2026-11-09 with `tools/sim/arrival_study.py`)
+
+The house is kept at 7 °C (VIA). On arrival the family presses **ARRIVO** (the VIA button turns
+into ARRIVO while the house is in VIA or OFF):
+
+1. mode → AUTO (schedule setpoint, normally 20 °C);
+2. **valve forced open for `arrival_force_min` = 60 min**, ending early as soon as the room is
+   within `arrival_stop_c` = 2 °C of the setpoint (so pressing ARRIVO in a house that is already
+   warm forces nothing). OFF_MIN still applies: it never reopens the valve early;
+3. then normal pulse control with **EFFICIENT** recovery (`recovery_arrival`).
+
+Simulation, arrival 17:00, house and walls at 7 °C, hold 20 °C (`docs/img/arrival_results.txt`,
+plot `docs/img/sim_arrival.png`). Outdoor mean −2 °C:
+
+| Strategy | Room after 1 h / 3 h / 6 h | Reaches 16 °C / 18 °C after | Billed min, first 48 h |
+|---|---|---|---|
+| Classic thermostat (≈ the old one) | 10.8 / 12.4 / 14.4 °C | 8.9 h / 13.0 h | 1427 |
+| FAST: continuous until near the setpoint (old default) | 10.8 / 12.4 / 14.4 | 8.9 h / 13.0 h | 1261 (+511) |
+| EFFICIENT only (pulses from the start) | 9.9 / 11.2 / 12.7 | 14.2 h / 18.9 h | **750** |
+| Forced 30 min + efficient | 10.0 / 11.2 / 12.8 | 14.0 h / 18.8 h | 762 (+12) |
+| **Forced 60 min + efficient (chosen)** | **10.8 / 11.3 / 12.9** | **13.8 h / 18.6 h** | **780 (+30)** |
+| Forced 120 min + efficient | 10.8 / 11.6 / 13.1 | 13.5 h / 18.4 h | 813 (+63) |
+| Forced 240 min + efficient | 10.8 / 12.4 / 13.4 | 12.7 h / 17.8 h | 876 (+126) |
+
+What the numbers say:
+
+- **The building mass sets the pace.** Even with the valve open non-stop it takes ~9 h to reach
+  16 °C and ~13 h to reach 18 °C (walls ≈ 30 MJ/K, radiators ≈ 9 kW at most). No valve strategy
+  makes a 7 °C house comfortable within an evening.
+- **The forced hour is cheap and noticeable early:** +0.9 °C at the 1 h mark and hot radiators at
+  once, for about +30 billed minutes per arrival (the pulses would have used ~22 of those 60
+  minutes anyway). 30 minutes gives almost nothing at the 1 h mark (the first ~25 min only heat
+  the cold circuit); beyond 60 minutes each extra hour costs ~+30 min for ~+0.2 °C.
+- **Running continuously until warm (FAST) costs ~8.5 billed hours more per arrival** (+511 min at
+  −2 °C, +612 at −8 °C) to be warm ~5 h sooner. That is why the arrival recovery is now EFFICIENT.
+  `recovery_arrival = 1` restores the fast behaviour if comfort matters more than cost.
+- After the forced hour the air dips ~0.3 °C for a while (pulses deliver less than continuous
+  flow). Visible in the plot; harmless.
+- Early stop (`arrival_stop_c`): with the house at 18.5 °C, forcing 60 min would overshoot to
+  20.6 °C and add 27 billed minutes; with the 2 °C stop nothing is forced.
+
+**The real fix for a cold arrival is a planned return** (not built yet, decision D23): heat
+before arriving. Same model, outdoor −2 °C, billed minutes over 24 h before to 48 h after arrival:
+
+| Plan | Room at arrival | Room 3 h later | Billed min (extra vs cold arrival) |
+|---|---|---|---|
+| Arrive cold, efficient | 7.0 °C | 11.5 °C | 789 |
+| Arrive cold, ARRIVO 60 min | 7.0 | 11.7 | 819 (+30) |
+| Arrive cold, FAST | 7.0 | 12.7 | 1279 (+490) |
+| Start heating 12 h before, efficient | 16.1 | 17.4 | 870 (+81) |
+| **Start 18 h before, efficient** | **18.2** | **19.4** | **897 (+108)** |
+| Start 24 h before, efficient | 19.8 | 20.1 | 926 (+137) |
+
+Arriving at 18 °C costs about 1.8 billed hours more than arriving cold, and **6.4 billed hours
+less than the FAST cold arrival**. Without internet it needs the return date set before leaving
+("VIA fino al …" on the CYD, or later from the phone app on site).
 
 ## 6. Fallback / LIMP
 
@@ -211,7 +268,9 @@ for summer or if you prefer. Default = LIMP, because an unattended mountain hous
 | `MAX_CYCLES_PER_HOUR` | 8 | 4–12 | Wear guard |
 | `SP_COMFORT` / `SP_NIGHT` / `SP_AWAY` | 20.0 / 18.5 / 7.0 °C | 5–25 | Setpoints are always clamped to 5–25 °C. Night 18.5 trade-off in §5 |
 | `I_BAND` | 1.0 °C | 0.3–3 | Integrate only when abs(e) ≤ I_BAND |
-| `RECOVERY_SCHED` / `RECOVERY_ARRIVAL` | EFFICIENT / FAST | — | §5 |
+| `RECOVERY_SCHED` / `RECOVERY_ARRIVAL` / `RECOVERY_USER` | EFFICIENT / **EFFICIENT** / FAST | — | §5. Arrival changed from FAST on 2026-11-09 (§5.1) |
+| `ARRIVAL_FORCE_MIN` | 60 min | 0–240 | ARRIVO forced heating; 0 = ARRIVO only switches to AUTO (§5.1) |
+| `ARRIVAL_STOP_C` | 2.0 °C | 0.5–10 | Forced heating ends once T ≥ setpoint − this |
 | `PREHEAT_MAX` | 3 h | 0–6 h | Optimum-start limit. Fixed 1 h until learned |
 | Default schedule | Comfort 06:30–22:30, Night otherwise | — | Weekly, up to 4 slots/day, copy-day function |
 | `W_ROOM` | 0.7 | 0–1 | Fusion weight of the room node vs the CYD sensor |
@@ -219,8 +278,9 @@ for summer or if you prefer. Default = LIMP, because an unattended mountain hous
 | `CONT_WARN_S` | 4 h | — | Continuous-ON warning |
 | `BUDGET_MIN_DAY` | 0 (off) | — | Daily billed-minutes alarm |
 
-All parameters can be edited from the web UI "Advanced" page (and the CYD diagnostics screen),
-are stored in NVS, and are logged in the CSV header when they change.
+All parameters can be edited on the CYD hidden page AVANZATE (and the serial console `set`;
+later the web UI), are stored in NVS. Firmware names, steps and exact clamping ranges:
+[07 "Hidden settings"](07-user-interface.md#hidden-settings-long-press-the-clock-2-s).
 
 ## 8. Tuning procedure (on site)
 

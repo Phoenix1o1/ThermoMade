@@ -20,7 +20,7 @@ Architecture and conventions: [docs/08-software.md](../docs/08-software.md). Con
 ## 2. Tests (no hardware)
 
 ```bash
-pio test -e native        # 42 tests: control, golden vectors vs simulator, protocol, utils
+pio test -e native        # 46 tests: control, golden vectors vs simulator, protocol, utils
 ```
 
 ## 3. Base station (CYD)
@@ -57,7 +57,12 @@ On every boot the screen shows three bars for 1.5 s:
 - [ ] SD card (FAT32): `status` → `sd ok`; `/log/events.csv` gets a `boot` line.
 - [ ] `time 2026-11-09 21:30` (local time) → clock on screen, `alarms` without `time-unknown`.
 - [ ] Screen goes dark after 30 s; the first touch only wakes it.
-- [ ] Long-press the clock 2 s → Diagnostics.
+- [ ] Long-press the clock 2 s → hidden settings (8 pages, [docs/07](../docs/07-user-interface.md#hidden-settings-long-press-the-clock-2-s)).
+      Set the clock on page DATA E ORA if no node is paired yet.
+- [ ] VIA, then ARRIVO (same button): valve opens once the 5 min boot pause is over, `status`
+      shows `arrive forced heating`, it stops after 60 min or when the room is within 2 °C.
+- [ ] Light: cover / uncover the LDR with the screen dark for a minute; `status` → `light` %
+      changes (needs the scale learned: one dark and one bright reading).
 
 ## 4. Room node (ESP32 DevKit)
 
@@ -70,8 +75,8 @@ pio run -e node_sht4x -t upload    # or node_dht22
 pio device monitor -e node_sht4x   # "status", "forget"
 ```
 
-Pairing: on the base `pair` (or Diagnostics → ACCOPPIA), then power or reset the node within
-60 s. The first paired node becomes the room sensor. The node LED blinks on each ACK.
+Pairing: on the base `pair` (or hidden page SENSORI → ACCOPPIA SENSORE), then power or reset
+the node within 60 s. The first paired node becomes the room sensor. The node LED blinks on each ACK.
 Re-pair: hold the node's BOOT button 3 s (or `forget` on its console).
 
 After pairing, the node's DS3231 takes the base's time (set with `time`) and gives it back after

@@ -37,6 +37,7 @@ const char* toString(ValveReason r) {
         case ValveReason::PlantOff: return "PLANT_OFF";
         case ValveReason::Fault: return "FAULT";
         case ValveReason::CycleLimit: return "CYCLE_LIMIT";
+        case ValveReason::Arrival: return "ARRIVAL";
     }
     return "?";
 }
@@ -70,6 +71,8 @@ bool sanitize(ControlParams& p) {
     ch |= clampField(p.sp_away, kSetpointMin, kAwayMaxC);
     ch |= clampField(p.recovery_done_c, 0.05, 2.0);
     ch |= clampField<uint16_t>(p.preheat_min, 0, 360);
+    ch |= clampField<uint16_t>(p.arrival_force_min, 0, 240);
+    ch |= clampField(p.arrival_stop_c, 0.5, 10.0);
     ch |= clampField<uint32_t>(p.stale_s, 60, 1800);
     ch |= clampField(p.w_room, 0.0, 1.0);
     ch |= clampField(p.tau_offset_s, 600.0, 48 * 3600.0);
@@ -90,7 +93,7 @@ bool sanitize(ControlParams& p) {
     if (p.t_valid_min_c >= p.t_valid_max_c) { p.t_valid_min_c = -20.0; p.t_valid_max_c = 50.0; ch = true; }
     if (static_cast<uint8_t>(p.recovery_schedule) > 1) { p.recovery_schedule = Recovery::Efficient; ch = true; }
     if (static_cast<uint8_t>(p.recovery_user) > 1) { p.recovery_user = Recovery::Fast; ch = true; }
-    if (static_cast<uint8_t>(p.recovery_arrival) > 1) { p.recovery_arrival = Recovery::Fast; ch = true; }
+    if (static_cast<uint8_t>(p.recovery_arrival) > 1) { p.recovery_arrival = Recovery::Efficient; ch = true; }
     if (static_cast<uint8_t>(p.fail_policy) > 1) { p.fail_policy = FailPolicy::Limp; ch = true; }
     if (static_cast<uint8_t>(p.algo) > 2) { p.algo = Algo::Pulse; ch = true; }
     return ch;

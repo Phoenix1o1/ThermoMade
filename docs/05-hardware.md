@@ -88,7 +88,7 @@ PCB ≈ 86 × 50 mm (measure yours for the enclosure).
 | 25, 32, 39, 33, 36 | Touch XPT2046 | Touch, **bit-banged** (IRQ 36 = pressed). Keeps VSPI for the SD card |
 | 18, 19, 23, 5 | microSD (VSPI) | Logging |
 | 4 / 16 / 17 | RGB LED (active LOW), **back side** | Kept off (invisible inside the box). Spare pads if ever needed |
-| 34 | LDR (input only) | Backlight level when the screen is on (the LDR faces the front) |
+| 34 | LDR (input only), front side | **Room light** (implemented): auto-brightness, light column in the log. See "Light sensing" |
 | 26 | Speaker amplifier | Driven LOW (silent, no hum). Alarm beeps later (optional small speaker) |
 | 0 | BOOT button | Not used by the firmware (factory reset is a console command) |
 | 1 / 3 | UART0 (CH340), P1 | Serial debug / CLI. P1 also carries 5 V in |
@@ -108,6 +108,36 @@ the display keeps HSPI.
 (not parasite) power. Put the sensor in the vented chamber of the box, away from the PSU and the
 ESP32 module. The firmware rejects CRC errors, the "disconnected" value (−127 °C) and the 85.0 °C
 power-on value, and re-detects the sensor after a failure.
+
+### Clock: the CYD has no RTC chip
+
+The ESP32 has an internal RTC timer: it keeps the time while powered and across resets and
+watchdog reboots (the firmware keeps "time valid" in RTC memory), but **not across a power cut**.
+There is no battery-backed clock chip on the CYD and no free pin pair for one (I²C needs two pins;
+only GPIO 22/27 are free and both are used). The system clock after a power cut therefore comes
+from the **DS3231 on the room node** (CR2032, ±2 ppm), within 30 s of the node's first frame.
+Without the node: set it on the CYD (hidden page DATA E ORA) or over USB (`time`). With an
+unknown time, AUTO runs as Comfort and the screen shows `Ora non impostata`.
+
+### Light sensing: the CYD's own LDR is enough
+
+The CYD has a light-dependent resistor on GPIO 34, on the **front**, left of the display. Its
+stock circuit has a small range and it sees the display backlight, so the firmware:
+
+- reads it only after the backlight has been off for 1 s (every 2 s, 8-sample average, ADC at 0 dB
+  for more sensitivity), keeps that value while the screen is on;
+- learns the scale itself (brightest / darkest readings, forgotten over ~3 days) and reports
+  **0–100 %**, not lux;
+- uses it for **auto-brightness** at wake-up and logs it every minute (`light_pct`), useful later
+  to spot occupancy and sun on the room.
+
+For this the front of the box needs the small hole over the LDR (`ldr_hole = true` in the
+OpenSCAD model, after checking `ldr_pos` against the real board; [13](13-enclosure.md)). Ideally
+add a thin light barrier between the hole and the display edge.
+
+An extra sensor is only needed for **calibrated lux** (e.g. to correlate sun with the heating
+model): a BH1750 (I²C, ~2 €) fits on the room node's I²C bus next to the SHT4x and DS3231, no CYD
+pin needed. Not planned now.
 
 ### Power budget & self-heating
 

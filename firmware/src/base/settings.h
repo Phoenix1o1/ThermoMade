@@ -20,7 +20,9 @@ struct Settings {
     tmc::Mode mode = tmc::Mode::Auto;
     TouchCal touch;
     uint8_t screen_timeout_s = 30;
-    uint8_t brightness = 180;            // 0..255 when the screen is on
+    uint8_t brightness = 180;            // 10..255: maximum backlight when the screen is on
+    uint8_t brightness_min = 12;         // auto-brightness: level in a dark room
+    uint8_t auto_brightness = 1;         // 1 = scale between min and max with the room light (LDR)
     uint8_t net_id = 0;                  // ESP-NOW network id, generated at first boot
     uint8_t ap_channel = 1;
 };

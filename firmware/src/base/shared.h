@@ -23,8 +23,9 @@ enum class ReqType : uint8_t {
     ResetLearning,   // i bit0 = duty, bit1 = CYD sensor offset
     Reboot,          // save, then restart
     FactoryReset,    // erase NVS, then restart
-    SetScreen,       // i = timeout s, v[0] = brightness
+    SetScreen,       // i = timeout s, v[0] = max brightness, v[1] = min brightness, v[2] = auto (<0: keep)
     SetTouchCal,     // v[0..6] = x_min x_max y_min y_max swap invx invy
+    Arrive,          // ARRIVO: back to AUTO + forced start (tmc::Controller::arrive)
 };
 struct Request {
     ReqType type = ReqType::SaveNow;
@@ -64,6 +65,9 @@ struct Snapshot {
     uint32_t node_age_s = UINT32_MAX;
     bool pairing_open = false;
     uint32_t req_dropped = 0;     // requests lost because the queue was full
+    int8_t light_pct = -1;        // room light 0..100 % from the CYD LDR, -1 = not known yet
+    uint16_t light_raw = 0;       // LDR ADC reading (higher = darker)
+    const char* reset_reason = "";
 };
 
 namespace shared {

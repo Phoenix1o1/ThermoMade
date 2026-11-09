@@ -2,9 +2,11 @@
 #define LGFX_USE_V1
 #include <LovyanGFX.hpp>
 #include "base_config.h"
+#include "light.h"
 #include "radio_base.h"
 #include "shared.h"
 #include "touch.h"
+#include "ui_menu.h"
 
 #ifndef TM_LCD_ST7789
 #define TM_LCD_ST7789 1
@@ -92,8 +94,8 @@ constexpr uint16_t kBtn = 0x2945;       // dark blue-grey
 constexpr uint16_t kBtnOn = 0x04B3;     // teal
 constexpr uint16_t kAlarm = 0xC000;     // dark red
 
-enum class Screen : uint8_t { Home, Diag };
-enum BtnId : uint8_t { kNone = 0, kMinus, kPlus, kAuto, kComfort, kNight, kAway, kClock, kPair, kBoost, kOff, kBack };
+enum BtnId : uint8_t { kNone = 0, kMinus, kPlus, kAuto, kComfort, kNight, kAway, kClock };
+constexpr uint32_t kMenuTimeoutS = 120;   // hidden pages: more time to read and edit
 
 struct Btn {
     int16_t x, y, w, h;
@@ -107,14 +109,10 @@ const Btn kHomeBtns[] = {
     {162, 188, 77, 50, kNight, "NOTTE"}, {242, 188, 76, 50, kAway, "VIA"},
     {230, 0, 90, 26, kClock, ""},
 };
-const Btn kDiagBtns[] = {
-    {2, 196, 104, 42, kPair, "ACCOPPIA"}, {108, 196, 104, 42, kBoost, "BOOST 60'"},
-    {214, 196, 104, 42, kBack, "INDIETRO"}, {214, 150, 104, 42, kOff, "SPENTO"},
-};
 
 Settings g_set;
-Screen g_screen = Screen::Home;
 volatile bool g_on = true;
+uint32_t g_off_since_ms = 0;
 volatile uint32_t g_last_on_ms = 0;
 uint32_t g_last_touch_ms = 0;
 bool g_wake_guard = false;
@@ -122,6 +120,7 @@ bool g_pressed = false;
 int g_stable = 0;
 uint32_t g_press_ms = 0, g_repeat_ms = 0;
 BtnId g_btn = kNone;
+int16_t g_px = 0, g_py = 0;          // where the current press started
 bool g_long_done = false;
 bool g_dump_raw = false;
 uint32_t g_last_draw_ms = 0;
@@ -131,12 +130,15 @@ double g_pending_sp = 0;
 uint32_t g_pending_until = 0;
 // caches for change detection
 char c_mode[32], c_clock[8], c_temp[12], c_rh[16], c_sp[12], c_status[48], c_info[48];
+uint16_t k_mode, k_clock, k_temp, k_rh, k_sp, k_status, k_info;   // colour last drawn per field
 int c_active = -1;
 uint16_t c_info_bg = 0;
-uint32_t c_snap_seq = 0;
 
-void drawButton(const Btn& b, bool active) {
-    g_lcd.fillRoundRect(b.x, b.y, b.w, b.h, 8, active ? kBtnOn : kBtn);
+// The 4th mode button reads VIA, or ARRIVO (orange) while the house is in VIA / SPENTO.
+bool arrivalButton(tmc::Mode m) { return m == tmc::Mode::Away || m == tmc::Mode::Off; }
+
+void drawButton(const Btn& b, bool active, const char* label = nullptr, uint16_t bg = 0) {
+    g_lcd.fillRoundRect(b.x, b.y, b.w, b.h, 8, bg ? bg : (active ? kBtnOn : kBtn));
     g_lcd.setTextColor(kFg);
     g_lcd.setTextDatum(lgfx::middle_center);
     if (b.id == kMinus || b.id == kPlus) {
@@ -147,7 +149,7 @@ void drawButton(const Btn& b, bool active) {
         if (b.id == kPlus) g_lcd.fillRect(cx - 3, cy - 14, 6, 28, kFg);
     } else {
         g_lcd.setFont(&fonts::FreeSansBold9pt7b);
-        g_lcd.drawString(b.label, b.x + b.w / 2, b.y + b.h / 2);
+        g_lcd.drawString(label ? label : b.label, b.x + b.w / 2, b.y + b.h / 2);
     }
     g_lcd.setTextDatum(lgfx::top_left);
 }
@@ -157,19 +159,20 @@ void degree(int x, int y, int r, uint16_t col) {
     g_lcd.drawCircle(x, y, r - 1, col);
 }
 
-// Draw text in a cleared box only if it changed.
-void field(char* cache, size_t cap, const char* txt, int x, int y, int w, int h, const lgfx::IFont* font,
-           uint16_t fg, uint16_t bg, bool deg = false) {
-    if (!g_dirty_all && strcmp(cache, txt) == 0) return;
+// Draw text in a cleared box only if the text or its colour changed. pad = text inset from x.
+void field(char* cache, size_t cap, uint16_t* ccol, const char* txt, int x, int y, int w, int h,
+           const lgfx::IFont* font, uint16_t fg, uint16_t bg, bool deg = false, int pad = 0) {
+    if (!g_dirty_all && strcmp(cache, txt) == 0 && *ccol == fg) return;
     strncpy(cache, txt, cap - 1);
     cache[cap - 1] = 0;
+    *ccol = fg;
     g_lcd.fillRect(x, y, w, h, bg);
     g_lcd.setFont(font);
     g_lcd.setTextColor(fg, bg);
-    g_lcd.drawString(txt, x, y);
+    g_lcd.drawString(txt, x + pad, y);
     if (deg && txt[0] && txt[0] != '-') {
         const int tw = g_lcd.textWidth(txt);
-        degree(x + tw + 6, y + 6, 4, fg);
+        degree(x + pad + tw + 6, y + 6, 4, fg);
     }
 }
 
@@ -195,6 +198,14 @@ void statusText(const Snapshot& s, char* out, size_t n, uint16_t* col) {
     *col = kFg;
     if (!st.heating_enabled) { snprintf(out, n, "Riscaldamento spento"); *col = kDim; return; }
     if (st.waiting_sensors) { snprintf(out, n, "Avvio: attendo i sensori..."); *col = kDim; return; }
+    if (st.arrival) {
+        *col = kAccent;
+        if (st.valve_open)
+            snprintf(out, n, "Arrivo: riscaldo al massimo, %lu min", static_cast<unsigned long>((st.arrival_left_s + 59) / 60));
+        else
+            snprintf(out, n, "Arrivo: la valvola apre tra %lu s", static_cast<unsigned long>(st.lockout_s));
+        return;
+    }
     if (st.valve_open) {
         *col = kAccent;
         if (st.next_action_s == UINT32_MAX) { snprintf(out, n, "Riscaldamento continuo"); return; }
@@ -229,47 +240,49 @@ void drawHome(const Snapshot& s) {
     if (g_dirty_all) {
         g_lcd.fillScreen(kBg);
         g_lcd.drawFastHLine(0, 27, 320, kBtn);
-        g_lcd.setFont(&fonts::FreeSans9pt7b);
+        g_lcd.setFont(&fonts::Font2);
         g_lcd.setTextColor(kDim, kBg);
-        g_lcd.drawString("Impostata", 186, 34);
+        g_lcd.drawString("Impostata", 200, 31);
         c_active = -1;
     }
     char buf[48];
     // top bar: mode + clock
     if (s.st.boost) snprintf(buf, sizeof buf, "BOOST %lu'", static_cast<unsigned long>((s.st.boost_left_s + 59) / 60));
+    else if (s.st.arrival) snprintf(buf, sizeof buf, "AUTO - ARRIVO %lu'", static_cast<unsigned long>((s.st.arrival_left_s + 59) / 60));
     else if (s.mode == tmc::Mode::Auto)
         snprintf(buf, sizeof buf, "AUTO - %s%s", s.st.period == tmc::Period::Comfort ? "Giorno" : "Notte",
                  s.st.preheating ? " (pre)" : (s.st.override_active ? " *" : ""));
     else snprintf(buf, sizeof buf, "%s", modeName(s.mode));
-    field(c_mode, sizeof c_mode, buf, 6, 5, 220, 20, &fonts::FreeSansBold9pt7b, kFg, kBg);
+    field(c_mode, sizeof c_mode, &k_mode, buf, 6, 5, 220, 20, &fonts::FreeSansBold9pt7b, kFg, kBg);
     if (s.time_valid) snprintf(buf, sizeof buf, "%02u:%02u", s.hour, s.minute);
     else snprintf(buf, sizeof buf, "--:--");
-    field(c_clock, sizeof c_clock, buf, 262, 5, 56, 20, &fonts::FreeSansBold9pt7b, s.time_valid ? kFg : kAlarm, kBg);
+    field(c_clock, sizeof c_clock, &k_clock, buf, 262, 5, 56, 20, &fonts::FreeSansBold9pt7b, s.time_valid ? kFg : kAlarm,
+          kBg);
 
     // big room temperature
     if (s.st.fusion.src != tmc::TempSource::None) snprintf(buf, sizeof buf, "%.1f", s.st.fusion.t_c);
     else snprintf(buf, sizeof buf, "--.-");
-    field(c_temp, sizeof c_temp, buf, 10, 40, 165, 60, &fonts::FreeSansBold24pt7b, s.st.valve_open ? kAccent : kFg,
-          kBg, true);
+    field(c_temp, sizeof c_temp, &k_temp, buf, 10, 40, 165, 60, &fonts::FreeSansBold24pt7b,
+          s.st.valve_open ? kAccent : kFg, kBg, true);
     if (s.st.fusion.rh_room >= 0) snprintf(buf, sizeof buf, "UR %.0f%%", s.st.fusion.rh_room);
     else buf[0] = 0;
-    field(c_rh, sizeof c_rh, buf, 12, 104, 160, 22, &fonts::FreeSans12pt7b, kBlue, kBg);
+    field(c_rh, sizeof c_rh, &k_rh, buf, 12, 104, 160, 22, &fonts::FreeSans12pt7b, kBlue, kBg);
 
     // setpoint (optimistic while a +/- is pending)
     const double sp = (static_cast<int32_t>(g_pending_until - millis()) > 0) ? g_pending_sp : s.st.sp;
     if (s.st.heating_enabled) snprintf(buf, sizeof buf, "%.1f", sp);
     else snprintf(buf, sizeof buf, "--");
-    field(c_sp, sizeof c_sp, buf, 196, 50, 110, 28, &fonts::FreeSansBold18pt7b, kFg, kBg, true);
+    field(c_sp, sizeof c_sp, &k_sp, buf, 196, 50, 110, 28, &fonts::FreeSansBold18pt7b, kFg, kBg, true);
 
     // status + info lines
     uint16_t col = kFg;
     statusText(s, buf, sizeof buf, &col);
-    field(c_status, sizeof c_status, buf, 6, 136, 314, 22, &fonts::FreeSans9pt7b, col, kBg);
+    field(c_status, sizeof c_status, &k_status, buf, 6, 136, 314, 22, &fonts::FreeSans9pt7b, col, kBg);
     uint16_t bg = kBg;
     infoText(s, buf, sizeof buf, &bg);
     if (g_dirty_all || bg != c_info_bg) c_info[0] = 1;   // force redraw on colour change
     c_info_bg = bg;
-    field(c_info, sizeof c_info, buf, 0, 160, 320, 24, &fonts::FreeSans9pt7b, kFg, bg);
+    field(c_info, sizeof c_info, &k_info, buf, 0, 160, 320, 24, &fonts::FreeSans9pt7b, kFg, bg, false, 6);
 
     // buttons
     int active = 2 + static_cast<int>(s.mode);   // index in kHomeBtns for AUTO..AWAY
@@ -278,63 +291,23 @@ void drawHome(const Snapshot& s) {
         for (const Btn& b : kHomeBtns) {
             if (b.id == kClock) continue;
             const int idx = static_cast<int>(&b - kHomeBtns);
-            drawButton(b, idx == active);
+            if (b.id == kAway && arrivalButton(s.mode)) drawButton(b, false, "ARRIVO", kAccent);
+            else drawButton(b, idx == active);
         }
         c_active = active;
     }
 }
 
-void drawDiag(const Snapshot& s) {
-    if (!g_dirty_all && s.seq == c_snap_seq) return;
-    c_snap_seq = s.seq;
-    const tmc::Status& st = s.st;
-    static bool pair_drawn = false;
-    if (g_dirty_all) {
-        g_lcd.fillScreen(kBg);
-        for (const Btn& b : kDiagBtns) drawButton(b, b.id == kPair && s.pairing_open);
-        pair_drawn = s.pairing_open;
-    } else if (pair_drawn != s.pairing_open) {
-        drawButton(kDiagBtns[0], s.pairing_open);
-        pair_drawn = s.pairing_open;
-    }
-    g_lcd.fillRect(0, 0, 320, 148, kBg);
-    g_lcd.fillRect(0, 148, 212, 46, kBg);
-    g_lcd.setFont(&fonts::Font2);
-    g_lcd.setTextColor(kFg, kBg);
-    int y = 2;
-    auto line = [&](const char* fmt, auto... args) {
-        char b[64];
-        snprintf(b, sizeof b, fmt, args...);
-        g_lcd.drawString(b, 4, y);
-        y += 16;
-    };
-    line("fw %d.%d  up %lus  relay %s  sd %s", TM_FW_MAJOR, TM_FW_MINOR,
-         static_cast<unsigned long>(st.uptime_ms / 1000), s.relay_on ? "ON" : "off", s.sd_ok ? "ok" : "NO");
-    line("T %.2f (%s)  room %.2f  base %.2f-%.2f", st.fusion.t_c, tmc::toString(st.fusion.src), st.fusion.t_room,
-         st.fusion.t_base_raw, st.fusion.offset);
-    line("offset learned %.1f h %s  RH %.1f", st.fusion.offset_learned_s / 3600.0, st.fusion.offset_ready ? "ok" : "..",
-         st.fusion.rh_room);
-    line("sp %.2f  u %.3f  P %.3f  I %.3f  %s%s", st.sp, st.u, st.p, st.i, st.coast ? "coast " : "",
-         st.recovering ? (st.recovery == tmc::Recovery::Efficient ? "rec-eff" : "rec-fast") : "");
-    line("valve %s (%s) next %lus lock %lus", st.valve_open ? "OPEN" : "closed", tmc::toString(st.reason),
-         static_cast<unsigned long>(st.next_action_s == UINT32_MAX ? 0 : st.next_action_s),
-         static_cast<unsigned long>(st.lockout_s));
-    line("today %lu min, %lu pulses  alarms 0x%02X", static_cast<unsigned long>(st.billed_today_s / 60),
-         static_cast<unsigned long>(st.pulses_today), st.alarms);
-    if (s.node_paired)
-        line("room node: %lus ago, RSSI %d dBm", static_cast<unsigned long>(s.node_age_s == UINT32_MAX ? 0 : s.node_age_s),
-             s.node_rssi);
-    else line("room node: NOT paired (press ACCOPPIA)");
-    line("time %s  algo %s", s.time_valid ? (s.time_src == TimeSrc::Manual ? "manual" : "node RTC") : "UNKNOWN",
-         st.algo_active == tmc::Algo::Classic ? "CLASSIC" : "PULSE");
-    line("pairing %s", s.pairing_open ? "OPEN (60 s)" : "closed");
+// Backlight level: fixed, or between min and max with the room light (sampled with the screen off).
+uint8_t backlightLevel() {
+    const int p = light::pct();
+    if (!g_set.auto_brightness || p < 0) return g_set.brightness;
+    const int lo = g_set.brightness_min, hi = g_set.brightness;
+    return static_cast<uint8_t>(lo + (hi - lo) * p / 100);
 }
 
 const Btn* hit(int16_t x, int16_t y) {
-    const Btn* list = g_screen == Screen::Home ? kHomeBtns : kDiagBtns;
-    const size_t n = g_screen == Screen::Home ? sizeof(kHomeBtns) / sizeof(Btn) : sizeof(kDiagBtns) / sizeof(Btn);
-    for (size_t i = 0; i < n; ++i) {
-        const Btn& b = list[i];
+    for (const Btn& b : kHomeBtns) {
         if (x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h) return &b;
     }
     return nullptr;
@@ -367,26 +340,27 @@ void onPress(BtnId id, const Snapshot& s, bool repeat) {
         case kAuto: if (!repeat) post(ReqType::SetMode, static_cast<int32_t>(tmc::Mode::Auto)); break;
         case kComfort: if (!repeat) post(ReqType::SetMode, static_cast<int32_t>(tmc::Mode::Comfort)); break;
         case kNight: if (!repeat) post(ReqType::SetMode, static_cast<int32_t>(tmc::Mode::Night)); break;
-        case kAway: if (!repeat) post(ReqType::SetMode, static_cast<int32_t>(tmc::Mode::Away)); break;
-        case kOff: if (!repeat) post(ReqType::SetMode, static_cast<int32_t>(tmc::Mode::Off)); break;
-        case kPair: if (!repeat) { radio_base::openPairing(); g_dirty_all = true; } break;
-        case kBoost: if (!repeat) post(ReqType::StartBoost, 60); break;
-        case kBack: g_screen = Screen::Home; g_dirty_all = true; break;
+        case kAway:
+            if (repeat) break;
+            if (arrivalButton(s.mode)) post(ReqType::Arrive);   // ARRIVO: back to AUTO + forced start
+            else post(ReqType::SetMode, static_cast<int32_t>(tmc::Mode::Away));
+            break;
         default: break;
     }
 }
 
 void screenOff() {
     g_on = false;
+    g_off_since_ms = millis();
     g_lcd.setBrightness(0);
     g_lcd.sleep();
+    menu::close();   // next wake-up always shows Home
 }
 
 void screenOnNow() {
     g_lcd.wakeup();
-    g_lcd.setBrightness(g_set.brightness);
+    g_lcd.setBrightness(backlightLevel());   // light level was measured while the screen was dark
     g_on = true;
-    g_screen = Screen::Home;
     g_dirty_all = true;
     g_last_touch_ms = millis();
 }
@@ -405,8 +379,29 @@ void handleTouch(const Snapshot& s) {
         g_wake_guard = true;
         return;
     }
-    if (g_wake_guard) {
-        if (!pressed) g_wake_guard = false;
+    if (g_wake_guard) {                   // swallow the press that woke the screen / opened the menu
+        if (!pressed) {
+            g_wake_guard = false;
+            g_pressed = false;
+        }
+        return;
+    }
+    if (menu::isOpen()) {                 // hidden settings pages
+        if (pressed && !g_pressed) {
+            g_pressed = true;
+            g_press_ms = g_repeat_ms = now;
+            g_px = tp.x;
+            g_py = tp.y;
+            menu::press(tp.x, tp.y, false, s);
+            if (!menu::isOpen()) g_dirty_all = true;   // X: back to Home
+        } else if (pressed && g_pressed) {
+            if (menu::repeats(g_px, g_py) && now - g_press_ms > 600 && now - g_repeat_ms > 200) {
+                g_repeat_ms = now;
+                menu::press(g_px, g_py, true, s);
+            }
+        } else if (!pressed && g_pressed) {
+            g_pressed = false;
+        }
         return;
     }
     if (pressed && !g_pressed) {
@@ -421,10 +416,11 @@ void handleTouch(const Snapshot& s) {
             g_repeat_ms = now;
             onPress(g_btn, s, true);
         }
-        if (g_btn == kClock && !g_long_done && now - g_press_ms > 2000) {   // hidden: diagnostics
+        if (g_btn == kClock && !g_long_done && now - g_press_ms > 2000) {   // hidden settings
             g_long_done = true;
-            g_screen = Screen::Diag;
+            menu::open(&g_lcd, s);
             g_dirty_all = true;
+            g_wake_guard = true;          // the long press must not also hit a menu button
         }
     } else if (!pressed && g_pressed) {
         g_pressed = false;
@@ -438,10 +434,14 @@ void applySettings(const Settings& c) {
     if (a.x_min != b.x_min || a.x_max != b.x_max || a.y_min != b.y_min || a.y_max != b.y_max ||
         a.swap_xy != b.swap_xy || a.invert_x != b.invert_x || a.invert_y != b.invert_y)
         touch::setCal(a);
-    if (c.brightness != g_set.brightness && g_on) g_lcd.setBrightness(c.brightness);
+    const bool bl = c.brightness != g_set.brightness || c.brightness_min != g_set.brightness_min ||
+                    c.auto_brightness != g_set.auto_brightness;
     g_set.touch = a;
     g_set.brightness = c.brightness;
+    g_set.brightness_min = c.brightness_min;
+    g_set.auto_brightness = c.auto_brightness;
     g_set.screen_timeout_s = c.screen_timeout_s < 10 ? 10 : c.screen_timeout_s;
+    if (bl && g_on) g_lcd.setBrightness(backlightLevel());   // show the new level at once
 }
 }  // namespace
 
@@ -461,6 +461,7 @@ void begin(const Settings& s) {
     g_lcd.setBrightness(g_set.brightness);
     g_lcd.fillScreen(kBg);
     touch::begin(s.touch);
+    light::begin();
     g_last_touch_ms = millis();
     g_last_on_ms = millis();
 }
@@ -483,16 +484,19 @@ void loop() {
     if (s.seq != 0) applySettings(s.cfg);
     handleTouch(s);
     const uint32_t now = millis();
+    light::poll(now, !g_on && now - g_off_since_ms >= 1000u);
     if (g_on) {
         g_last_on_ms = now;
-        if (now - g_last_touch_ms > static_cast<uint32_t>(g_set.screen_timeout_s) * 1000u) {
+        uint32_t timeout_s = g_set.screen_timeout_s;
+        if (menu::isOpen() && timeout_s < kMenuTimeoutS) timeout_s = kMenuTimeoutS;
+        if (now - g_last_touch_ms > timeout_s * 1000u) {
             screenOff();
             return;
         }
         if (g_dirty_all || now - g_last_draw_ms >= 250) {
             g_last_draw_ms = now;
-            if (g_screen == Screen::Home) drawHome(s);
-            else drawDiag(s);
+            if (menu::isOpen()) menu::draw(s, g_dirty_all);
+            else drawHome(s);
             g_dirty_all = false;
         }
     }

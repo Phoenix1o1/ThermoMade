@@ -5,13 +5,15 @@
 ### Per minute (daily CSV on microSD `/log/YYYY-MM-DD.csv`, implemented in v0.1)
 
 ```
-unix,local,uptime_s,t_ctrl,src,t_room,rh,t_base,t_base_corr,offset,sp,mode,period,boost,u,p,i,valve,reason,billed_today_s,pulses_today,alarms,limp,humidity,dew_c,rssi,node_age_s
-1794256920,2026-11-09 21:42:00,3600,20.31,1,20.28,41.2,21.42,20.34,1.080,20.00,0,0,0,0.1800,-0.1900,0.3700,1,1,3780,9,0,0,1,6.9,-61,12
+unix,local,uptime_s,t_ctrl,src,t_room,rh,t_base,t_base_corr,offset,sp,mode,period,boost,u,p,i,valve,reason,billed_today_s,pulses_today,alarms,limp,humidity,dew_c,rssi,node_age_s,arrival,light_pct
+1794256920,2026-11-09 21:42:00,3600,20.31,1,20.28,41.2,21.42,20.34,1.080,20.00,0,0,0,0.1800,-0.1900,0.3700,1,1,3780,9,0,0,1,6.9,-61,12,0,37
 ```
 
 - `src`: 0 none, 1 fused, 2 room only, 3 CYD only. `mode`: 0 AUTO, 1 COMFORT, 2 NIGHT, 3 AWAY,
   4 OFF. `period`: 0 Comfort, 1 Night. `reason`: `tmc::ValveReason` (1 pulse, 2 continuous,
-  4 boost, 5 limp, 6 target reached, 7 no demand, ...). `humidity`: 1 ok, 2 too dry, 3 too humid.
+  4 boost, 5 limp, 6 target reached, 7 no demand, 12 arrival, ...). `humidity`: 1 ok, 2 too dry,
+  3 too humid. `arrival`: 1 while ARRIVO's forced hour runs. `light_pct`: room light 0–100 %
+  from the CYD's LDR (empty until its scale is learned).
 - Empty fields for sensors that are missing or invalid.
 - Without a valid clock the lines go to `/log/notime.csv` (the `uptime_s` column still orders them).
 - Each line is appended and the file closed again: a power cut loses at most one line.
@@ -23,6 +25,7 @@ unix,local,uptime_s,t_ctrl,src,t_room,rh,t_base,t_base_corr,offset,sp,mode,perio
 
 `unix,local,uptime_s,event,a,b,x,y` with events `valve_open`/`valve_close` (a = reason,
 x = u, y = temperature), `mode` (a = new, b = previous), `setpoint` (x = value), `source`,
+`arrival` (a = 1 forced hour starts, 0 ends; x = temperature),
 `limp_on`/`limp_off`, `alarm_on`/`alarm_off` (a = bit), `day` (x = billed minutes, y = pulses of
 the day that ended), `boot`, and free `text` lines (boot reason, time set, schedule changed,
 learning reset, restart).

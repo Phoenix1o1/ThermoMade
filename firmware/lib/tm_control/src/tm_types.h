@@ -38,7 +38,8 @@ enum class ValveReason : uint8_t {
     UserOff = 8,     // mode OFF without antifreeze
     PlantOff = 9,    // outside central-plant hours
     Fault = 10,      // FAIL_OFF policy, sensor lost
-    CycleLimit = 11  // MAX_CYCLES_PER_HOUR reached (open deferred)
+    CycleLimit = 11, // MAX_CYCLES_PER_HOUR reached (open deferred)
+    Arrival = 12     // ARRIVO: forced heating after arriving in a cold house
 };
 
 enum class HumidityAdvice : uint8_t { Unknown = 0, Ok = 1, TooDry = 2, TooHumid = 3 };

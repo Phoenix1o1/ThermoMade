@@ -479,6 +479,77 @@ static void test_controller_reset_learning() {
     TEST_ASSERT_TRUE(out.i_away < 0.0);   // unknown -> I0 when the band is entered
 }
 
+// ARRIVO in a cold house: mode back to AUTO, valve forced open for arrival_force_min, then pulses
+// with EFFICIENT recovery (u <= uc). Decided with tools/sim/arrival_study.py.
+static void test_controller_arrival_cold_house() {
+    Rig r;
+    r.now = 17u * 3600u * 1000u;            // 17:00, Comfort period
+    r.c.begin(r.now, r.p, WeekSchedule::makeDefault(), PersistentState{}, Mode::Away, /*start_unlocked=*/true);
+    for (int k = 0; k < 60; ++k) r.step(7.5);
+    TEST_ASSERT_FALSE(r.c.status().valve_open);   // just above the 7 C antifreeze setpoint: no demand
+    r.c.arrive();
+    r.step(7.5);
+    TEST_ASSERT_EQUAL(int(Mode::Auto), int(r.c.mode()));
+    TEST_ASSERT_TRUE(r.c.status().arrival);
+    TEST_ASSERT_TRUE(r.c.status().valve_open);
+    TEST_ASSERT_EQUAL(int(ValveReason::Arrival), int(r.c.status().reason));
+    for (int k = 0; k < 60 * 60 - 2; ++k) TEST_ASSERT_TRUE(r.step(9.0));   // open for the whole hour
+    for (int k = 0; k < 5; ++k) r.step(9.0);
+    TEST_ASSERT_FALSE(r.c.status().arrival);
+    // afterwards: efficient recovery, demand capped at uc
+    bool saw_close = false;
+    for (int k = 0; k < 2 * 3600; ++k) {
+        const bool o = r.step(9.5);
+        saw_close |= !o;
+        TEST_ASSERT_TRUE(r.c.status().u <= crossoverDuty(r.p) + 1e-12);
+    }
+    TEST_ASSERT_TRUE(r.c.status().recovering);
+    TEST_ASSERT_EQUAL(int(Recovery::Efficient), int(r.c.status().recovery));
+    TEST_ASSERT_TRUE(saw_close);   // pulses, not continuous
+}
+
+static void test_controller_arrival_warm_house_no_force() {
+    Rig r;
+    r.now = 17u * 3600u * 1000u;
+    r.c.begin(r.now, r.p, WeekSchedule::makeDefault(), PersistentState{}, Mode::Away, true);
+    for (int k = 0; k < 60; ++k) r.step(18.5);
+    r.c.arrive();
+    r.step(18.5);   // 18.5 >= 20 - 2: nothing to force
+    TEST_ASSERT_FALSE(r.c.status().arrival);
+    TEST_ASSERT_EQUAL(int(Mode::Auto), int(r.c.mode()));
+}
+
+static void test_controller_arrival_stops_when_close_and_respects_lockout() {
+    Rig r;
+    r.now = 17u * 3600u * 1000u;
+    r.c.begin(r.now, r.p, WeekSchedule::makeDefault(), PersistentState{}, Mode::Away);   // boot lockout
+    r.c.arrive();
+    for (int k = 0; k < 299; ++k) TEST_ASSERT_FALSE(r.step(10.0));   // OFF_MIN from boot is absolute
+    TEST_ASSERT_TRUE(r.c.status().arrival);
+    TEST_ASSERT_TRUE(r.step(10.0));
+    // the room warms up past setpoint - 2 C: the forced phase ends early (valve may then pulse)
+    for (int k = 0; k < 600; ++k) r.step(18.2);
+    TEST_ASSERT_FALSE(r.c.status().arrival);
+}
+
+static void test_controller_arrival_cancelled_by_mode() {
+    Rig r;
+    r.now = 17u * 3600u * 1000u;
+    r.c.begin(r.now, r.p, WeekSchedule::makeDefault(), PersistentState{}, Mode::Away, true);
+    r.c.arrive();
+    for (int k = 0; k < 400; ++k) r.step(8.0);
+    TEST_ASSERT_TRUE(r.c.status().arrival);
+    r.c.setMode(Mode::Away);
+    r.step(8.0);
+    TEST_ASSERT_FALSE(r.c.status().arrival);
+    r.p.arrival_force_min = 0;   // feature disabled: ARRIVO only switches to AUTO
+    r.c.setParams(r.p);
+    r.c.arrive();
+    r.step(8.0);
+    TEST_ASSERT_FALSE(r.c.status().arrival);
+    TEST_ASSERT_EQUAL(int(Mode::Auto), int(r.c.mode()));
+}
+
 // The big one: random user actions, sensor dropouts, plant gating and params changes for 20 days.
 // Hard rules must hold: OFF_MIN never violated, ON_MIN only shortened by forced closes,
 // setpoint always in [5, 25], u always in [0, 1].
@@ -505,6 +576,7 @@ static void test_controller_fuzz_hard_rules() {
             else if (ev == 3) r.c.stopBoost();
             else if (ev == 4) plant = !plant;
             else if (ev == 5) { ControlParams q = r.p; q.algo = Algo(rng() % 3); r.c.setParams(q); }
+            else if (ev == 6) r.c.arrive();
             const bool sensor_ok = (t_abs / 3600000ULL) % 7 != 3;   // one hour in seven without sensor
             const bool o = r.step(room, sensor_ok, plant, dt);
             const Status& s = r.c.status();
@@ -556,6 +628,10 @@ int main(int, char**) {
     RUN_TEST(test_controller_classic_hysteresis);
     RUN_TEST(test_controller_persistent_roundtrip);
     RUN_TEST(test_controller_reset_learning);
+    RUN_TEST(test_controller_arrival_cold_house);
+    RUN_TEST(test_controller_arrival_warm_house_no_force);
+    RUN_TEST(test_controller_arrival_stops_when_close_and_respects_lockout);
+    RUN_TEST(test_controller_arrival_cancelled_by_mode);
     RUN_TEST(test_controller_fuzz_hard_rules);
     return UNITY_END();
 }

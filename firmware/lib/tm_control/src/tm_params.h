@@ -37,9 +37,13 @@ struct ControlParams {
     // --- recovery after setpoint increases ---
     Recovery recovery_schedule = Recovery::Efficient;  // Night -> Comfort
     Recovery recovery_user = Recovery::Fast;           // +/- and manual modes
-    Recovery recovery_arrival = Recovery::Fast;        // Away/Off -> heating
+    Recovery recovery_arrival = Recovery::Efficient;   // Away/Off -> heating (after the ARRIVO forced start)
     double recovery_done_c = 0.3;   // recovery ends when sp - T <= this
     uint16_t preheat_min = 60;      // start Comfort earlier (fixed until learned)
+
+    // --- ARRIVO button (tools/sim/arrival_study.py, docs/04 §5) ---
+    uint16_t arrival_force_min = 60;   // forced heating after arriving (0 = no forced start)
+    double arrival_stop_c = 2.0;       // ...ends early once T >= setpoint - this
 
     // --- sensors / fusion ---
     uint32_t stale_s = 300;         // node silent -> lost

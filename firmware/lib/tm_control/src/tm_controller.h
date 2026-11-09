@@ -32,7 +32,8 @@ struct PersistentState {
 
 enum class EventType : uint8_t {
     ValveOpen = 0, ValveClose, ModeChange, SetpointChange, SourceChange,
-    LimpEnter, LimpExit, AlarmOn, AlarmOff, DayRollover, Boot
+    LimpEnter, LimpExit, AlarmOn, AlarmOff, DayRollover, Boot,
+    Arrival                       // a = 1 forced start begins, 0 ends; x = temperature
 };
 
 // Alarm bits (Status::alarms)
@@ -65,6 +66,8 @@ struct Status {
     bool override_active = false;
     bool boost = false;
     uint32_t boost_left_s = 0;
+    bool arrival = false;         // ARRIVO forced start running
+    uint32_t arrival_left_s = 0;
     Algo algo_active = Algo::Pulse;
     bool recovering = false;
     Recovery recovery = Recovery::Fast;
@@ -107,7 +110,11 @@ public:
     void adjustSetpoint(double delta_c);
     void setSetpoint(double sp_c);
     void startBoost(uint16_t minutes);
-    void stopBoost();
+    void stopBoost();               // also ends an ARRIVO forced start
+    // ARRIVO: back to AUTO (if away/off) and force the valve open for arrival_force_min, ending
+    // early once T >= setpoint - arrival_stop_c. Then normal control with the arrival recovery.
+    // OFF_MIN still applies (the FSM never reopens early).
+    void arrive();
     // Forget what was learned: the duty per band (back to I0) and/or the CYD sensor offset.
     void resetLearning(bool duty, bool offset);
     bool paramsChanged() { bool c = params_dirty_; params_dirty_ = false; return c; }
@@ -151,6 +158,9 @@ private:
 
     bool boost_ = false;
     uint64_t boost_until_ms_ = 0;
+    bool arrival_ = false;
+    uint64_t arrival_until_ms_ = 0;
+    bool arrival_started_ = false;   // first update after arrive() not yet seen
 
     bool have_last_sp_ = false;
     double last_sp_ = 0.0;

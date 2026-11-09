@@ -15,6 +15,7 @@
 #include <esp_task_wdt.h>
 #include "base_config.h"
 #include "cli.h"
+#include "light.h"
 #include "logger.h"
 #include "param_table.h"
 #include "radio_base.h"
@@ -38,6 +39,7 @@ namespace {
 
 tmc::Controller g_ctl;
 Settings g_cfg;                  // owned by the control task after setup()
+const char* g_reset_str = "";
 bool g_cfg_dirty = false;
 uint32_t g_cfg_dirty_ms = 0;
 uint32_t g_persist_ms = 0;
@@ -73,6 +75,7 @@ const char* eventName(tmc::EventType t) {
         case tmc::EventType::AlarmOff: return "alarm off";
         case tmc::EventType::DayRollover: return "day";
         case tmc::EventType::Boot: return "boot";
+        case tmc::EventType::Arrival: return "arrival";
     }
     return "?";
 }
@@ -149,7 +152,14 @@ void handleRequest(const Request& r, uint32_t now) {
         case ReqType::SetScreen:
             if (r.i >= 10 && r.i <= 255) g_cfg.screen_timeout_s = static_cast<uint8_t>(r.i);
             if (r.v[0] >= 10 && r.v[0] <= 255) g_cfg.brightness = static_cast<uint8_t>(r.v[0]);
+            if (r.v[1] >= 1 && r.v[1] <= 255) g_cfg.brightness_min = static_cast<uint8_t>(r.v[1]);
+            if (r.v[2] >= 0) g_cfg.auto_brightness = r.v[2] ? 1 : 0;
+            if (g_cfg.brightness_min > g_cfg.brightness) g_cfg.brightness_min = g_cfg.brightness;
             markDirty(now);
+            break;
+        case ReqType::Arrive:
+            g_ctl.arrive();
+            logger::text("ARRIVO pressed", timekeeper::now());
             break;
         case ReqType::SetTouchCal: {
             TouchCal c;
@@ -187,6 +197,9 @@ Snapshot buildSnapshot(uint32_t now) {
     s.node_age_s = radio_base::roomAgeS();
     s.pairing_open = radio_base::pairingOpen();
     s.req_dropped = shared::requestsDropped();
+    s.light_pct = light::pct();
+    s.light_raw = light::raw();
+    s.reset_reason = g_reset_str;
     (void)now;
     return s;
 }
@@ -278,6 +291,7 @@ void setup() {
     Serial.setTxBufferSize(1024);
     Serial.begin(115200);
     const esp_reset_reason_t rr = esp_reset_reason();
+    g_reset_str = resetReason(rr);
     Serial.printf("\n\nTermoMade base fw %d.%d  reset: %s\n", TM_FW_MAJOR, TM_FW_MINOR, resetReason(rr));
 
     shared::init();

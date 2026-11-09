@@ -24,13 +24,16 @@ release the heat. A PI controller picks pulse frequency first and pulse width on
 
 ## Status
 
-Phase 0 planning done (2026-11-09). D1–D5, D7, D9, D10, D19, D20 answered (CYD = 2-USB variant,
+Phase 0 planning done (2026-11-09). D1–D5, D7, D9, D10, D19, D20, D22, D24 answered (CYD = 2-USB variant,
 ST7789; PlatformIO; room sensor SHT4x or DHT22; CYD sensor DS18B20).
 Enclosure v1 exists: `hardware/enclosures/termomade_box.scad` + STLs (not yet test-printed).
-**Firmware v0.1 written (2026-11-09), compiles, 42 native tests pass, NOT yet run on hardware.**
-Bring-up: `firmware/README.md`. **Open: D13 (neutral in the 503 box?), D18 (relay module
-active-HIGH/LOW → `TM_RELAY_ACTIVE_HIGH`), D21 (panel colours/touch cal)** and others in
-`docs/10-roadmap.md`. Next: bench bring-up, then web server/JSON API, OTA, Android app (Phase 3).
+**Firmware written (2026-11-09): base v0.2, node v0.1, compiles, 46 native tests pass, NOT yet run
+on hardware.** Base v0.2 = ARRIVO button (D22), 8 hidden settings pages (manual date/time, all
+parameters), LDR light sensing + auto-brightness (D24). Bring-up: `firmware/README.md`.
+**Open: D13 (neutral in the 503 box?), D18 (relay module active-HIGH/LOW →
+`TM_RELAY_ACTIVE_HIGH`), D21 (panel colours/touch cal), D23 (planned return), D25 (LDR hole)**
+and others in `docs/10-roadmap.md`. Next: bench bring-up, then web server/JSON API, OTA, Android
+app (Phase 3).
 
 ## Hard rules (do not break in code)
 
@@ -53,7 +56,8 @@ ON_MIN 180 s · OFF_MIN 300 s · tick 30 s · EMA τ 120 s · KP 0.6/°C · TI 1
 I_BAND 1.0 °C (+ coast after setpoint decrease) · U_MIN 0.03 · U_CONT 0.90 · uc = 0.375 ·
 STALE 300 s · I0 0.15 · MAX_CYCLES_PER_HOUR 8 · W_ROOM 0.7 · TAU_OFF 6 h ·
 Comfort 20.0 / Night 18.5 / Away 7.0 °C · schedule Comfort 06:30–22:30 ·
-recovery EFFICIENT (u ≤ uc) for scheduled rises, FAST for arrival/boost.
+recovery EFFICIENT (u ≤ uc) for scheduled rises and after arrival, FAST for user +/− ·
+ARRIVO = AUTO + forced open 60 min (stop at sp − 2 °C), then efficient (docs/04 §5.1).
 
 Modulator: u ≤ uc → ON = ON_MIN, OFF = ON_MIN·(1−u)/u; uc < u < U_CONT → OFF = OFF_MIN,
 ON = OFF_MIN·u/(1−u); u ≥ U_CONT → continuous; u < U_MIN → no pulses.
@@ -87,7 +91,12 @@ Commands (in `firmware/`): `pio test -e native` · `pio run -e base_cyd` · `pio
   PID, modulator, valve FSM, humidity, counters, events). Pure, unit-tested, golden-matched.
 - `lib/tm_protocol` (`tmp`): ESP-NOW frames v1. `lib/tm_util` (`tmu`): CRC, decoders, dates.
 - `src/base`: control task owns Controller + Settings + relay; UI/console/radio talk to it only
-  through `shared.h` (request queue, schedule mailbox, Snapshot).
+  through `shared.h` (request queue, schedule mailbox, Snapshot). `ui.cpp` = Home,
+  `ui_menu.cpp` = hidden pages (long-press clock), `light.cpp` = LDR.
+- UI changes: render with `tools/ui_preview/build.sh` (real UI code on the PC → `docs/img/ui/`)
+  and look at the PNGs before committing.
+- `tools/sim/arrival_study.py`: arrival scenarios; `ForcedStart` in `thermal_sim.py` mirrors
+  `Controller::arrive()` (golden-tested).
 - `src/node`: room node (SHT4x | DHT22 + DS3231).
 
 ## Andrea's preferences relevant here

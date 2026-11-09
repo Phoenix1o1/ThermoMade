@@ -6,7 +6,7 @@
 
 namespace {
 constexpr uint32_t kMagic = 0x544D5331;   // "TMS1"
-constexpr uint16_t kVersion = 1;          // bump on any layout change of Settings
+constexpr uint16_t kVersion = 2;          // bump on any layout change of Settings (2: arrival, auto-brightness)
 
 template <typename T>
 struct Blob {
@@ -64,6 +64,9 @@ Settings load() {
     s.schedule.sanitize();
     if (static_cast<uint8_t>(s.mode) > 4) s.mode = tmc::Mode::Auto;
     if (s.screen_timeout_s < 10) s.screen_timeout_s = 30;
+    if (s.brightness < 10) s.brightness = 180;
+    if (s.brightness_min < 1 || s.brightness_min > s.brightness) s.brightness_min = 12;
+    s.auto_brightness = s.auto_brightness ? 1 : 0;
     if (s.ap_channel < 1 || s.ap_channel > 13) s.ap_channel = 1;
     if (s.net_id == 0) {
         s.net_id = static_cast<uint8_t>(1 + esp_random() % 254);

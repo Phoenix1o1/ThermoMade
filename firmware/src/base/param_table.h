@@ -11,27 +11,34 @@ struct ParamDesc {
     PType type;
     size_t offset;
     const char* unit;
+    double step;        // touch-screen -/+ step
+    double max_enum;    // Enum/Bool: highest value (the -/+ buttons wrap around)
 };
 
-#define TM_P(field, type, unit) {#field, PType::type, offsetof(tmc::ControlParams, field), unit}
+#define TM_P(field, type, unit, step) {#field, PType::type, offsetof(tmc::ControlParams, field), unit, step, 1}
+#define TM_E(field, unit, maxv) {#field, PType::Enum, offsetof(tmc::ControlParams, field), unit, 1, maxv}
 
+// Order = order on the AVANZATE page. Ranges are enforced by tmc::sanitize() (docs/04 §7).
 static const ParamDesc kParams[] = {
-    TM_P(on_min_s, U32, "s"),           TM_P(off_min_s, U32, "s"),        TM_P(tick_s, U32, "s"),
-    TM_P(max_cycles_per_hour, U8, "/h"), TM_P(kp, F64, "1/C"),             TM_P(ti_s, F64, "s"),
-    TM_P(td_s, F64, "s"),               TM_P(tf_s, F64, "s"),             TM_P(i_band_c, F64, "C"),
-    TM_P(i0, F64, ""),                  TM_P(u_min, F64, ""),             TM_P(u_cont, F64, ""),
-    TM_P(sp_comfort, F64, "C"),         TM_P(sp_night, F64, "C"),         TM_P(sp_away, F64, "C"),
-    TM_P(antifreeze_in_off, Bool, ""),  TM_P(recovery_schedule, Enum, "0=eff 1=fast"),
-    TM_P(recovery_user, Enum, "0=eff 1=fast"), TM_P(recovery_arrival, Enum, "0=eff 1=fast"),
-    TM_P(recovery_done_c, F64, "C"),    TM_P(preheat_min, U16, "min"),    TM_P(stale_s, U32, "s"),
-    TM_P(w_room, F64, ""),              TM_P(tau_offset_s, F64, "s"),     TM_P(offset_learn_max_slope_c_h, F64, "C/h"),
-    TM_P(offset_min_learn_s, F64, "s"), TM_P(disagree_c, F64, "C"),       TM_P(disagree_s, U32, "s"),
-    TM_P(median3, Bool, ""),            TM_P(fail_policy, Enum, "0=limp 1=off"), TM_P(limp_min, F64, ""),
-    TM_P(limp_max, F64, ""),            TM_P(limp_default, F64, ""),      TM_P(algo, Enum, "0=pulse 1=classic 2=alt"),
-    TM_P(classic_hyst_c, F64, "C"),     TM_P(cont_warn_s, U32, "s"),      TM_P(budget_min_day, U32, "min"),
-    TM_P(rh_low, F64, "%"),             TM_P(rh_high, F64, "%"),          TM_P(rh_hyst, F64, "%"),
+    TM_P(sp_comfort, F64, "C", 0.5),          TM_P(sp_night, F64, "C", 0.5),          TM_P(sp_away, F64, "C", 0.5),
+    TM_P(antifreeze_in_off, Bool, "1=yes", 1), TM_P(preheat_min, U16, "min", 15),
+    TM_P(arrival_force_min, U16, "min", 15),  TM_P(arrival_stop_c, F64, "C", 0.5),
+    TM_E(recovery_schedule, "0=eff 1=fast", 1), TM_E(recovery_user, "0=eff 1=fast", 1),
+    TM_E(recovery_arrival, "0=eff 1=fast", 1),  TM_P(recovery_done_c, F64, "C", 0.1),
+    TM_P(on_min_s, U32, "s", 10),             TM_P(off_min_s, U32, "s", 10),          TM_P(max_cycles_per_hour, U8, "/h", 1),
+    TM_P(kp, F64, "1/C", 0.05),               TM_P(ti_s, F64, "s", 600),              TM_P(td_s, F64, "s", 60),
+    TM_P(tf_s, F64, "s", 10),                 TM_P(i_band_c, F64, "C", 0.1),          TM_P(i0, F64, "", 0.01),
+    TM_P(u_min, F64, "", 0.01),               TM_P(u_cont, F64, "", 0.01),            TM_P(tick_s, U32, "s", 5),
+    TM_P(stale_s, U32, "s", 30),              TM_P(w_room, F64, "", 0.05),            TM_P(tau_offset_s, F64, "s", 1800),
+    TM_P(offset_learn_max_slope_c_h, F64, "C/h", 0.1), TM_P(offset_min_learn_s, F64, "s", 600),
+    TM_P(disagree_c, F64, "C", 0.1),          TM_P(disagree_s, U32, "s", 60),         TM_P(median3, Bool, "1=on", 1),
+    TM_E(fail_policy, "0=limp 1=off", 1),     TM_P(limp_min, F64, "", 0.01),          TM_P(limp_max, F64, "", 0.01),
+    TM_P(limp_default, F64, "", 0.01),        TM_E(algo, "0=pulse 1=classic 2=alt", 2),
+    TM_P(classic_hyst_c, F64, "C", 0.05),     TM_P(cont_warn_s, U32, "s", 1800),      TM_P(budget_min_day, U32, "min", 10),
+    TM_P(rh_low, F64, "%", 1),                TM_P(rh_high, F64, "%", 1),             TM_P(rh_hyst, F64, "%", 0.5),
 };
 #undef TM_P
+#undef TM_E
 
 constexpr int kParamCount = sizeof(kParams) / sizeof(kParams[0]);
 
