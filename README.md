@@ -57,7 +57,7 @@ flowchart LR
 | [10 Roadmap](docs/10-roadmap.md) | **Decisions (answered + open)**, phases, risks |
 | [11 Legacy review](docs/11-legacy-review.md) | What the old `Termostato.ino` really did, bugs, what we keep |
 | [12 Android app](docs/12-android-app.md) | Parents' app: WebView shell, binding to the offline AP, build & install |
-| [13 Enclosure](docs/13-enclosure.md) | 2-part OpenSCAD box on the 503 box: layout, parameters, mains safety |
+| [13 Enclosure](docs/13-enclosure.md) | **2-part OpenSCAD box on the 503 box (v1 model + STLs)**: layout, joint, print & assembly, mains safety |
 
 ## Repository layout
 

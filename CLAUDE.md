@@ -13,7 +13,7 @@ release the heat. A PI controller picks pulse frequency first and pulse width on
 
 - Valve actuator: **Coster CDK 068**, 230 V~, 3-point (common/open/close), 60 s stroke, flow from
   ~30 s. Its aux microswitch probably feeds the condo meter. **Never touch it.**
-- Base: **ESP32-2432S028R "CYD"** in a 2-part printed box on the old thermostat's **503 box**.
+- Base: **ESP32-2432S028 "CYD", 2-USB variant (USB-C + micro, ST7789 display)** in a 2-part printed box on the old thermostat's **503 box**.
   UI, control, SPDT relay, **local DS18B20** (fused with the room node, learned offset), logging,
   Wi-Fi **AP only**, web pages + JSON API.
 - Room node: **ESP32 DevKit + SHT4x + DS3231 RTC** (system clock after power cuts), ESP-NOW every
@@ -24,7 +24,8 @@ release the heat. A PI controller picks pulse frequency first and pulse width on
 
 ## Status
 
-Phase 0 planning done (2026-11-09). D1–D4, D7, D10 answered. **Open: D13 (is neutral in the 503
+Phase 0 planning done (2026-11-09). D1–D5, D7, D10 answered (CYD = 2-USB variant, ST7789).
+Enclosure v1 exists: `hardware/enclosures/termomade_box.scad` + STLs (not yet test-printed). **Open: D13 (is neutral in the 503
 box?)** and others in `docs/10-roadmap.md`. **No firmware yet.** Andrea asked for a plan first.
 Write code only when he asks.
 
@@ -90,4 +91,5 @@ no `String` building in hot paths, no blocking delays outside `setup()`, secrets
 
 - Legacy sketch + review: `reference/legacy/Termostato.ino`, `docs/11-legacy-review.md`
 - Simulator: `tools/sim/thermal_sim.py`; results/plots: `docs/img/`
-- Android app plan: `docs/12-android-app.md`; enclosure spec: `docs/13-enclosure.md`
+- Android app plan: `docs/12-android-app.md`; enclosure: `docs/13-enclosure.md`,
+  `hardware/enclosures/termomade_box.scad` (CYD geometry from the community STEP model, see doc 13)

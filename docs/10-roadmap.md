@@ -11,7 +11,8 @@
 | D3 | Meter / billing? | **Yearly fuel split by valve hours × apartment size** → pure time, savings are real |
 | D4 | Internet at the house? | **None** → AP only, RTC on the room node + phone time sync, local-only Android app |
 | D7 | Rooms / sensors | **One big room + bathroom, one zone.** Second sensor **on the CYD**, fused with the room node |
-| D10 | GitHub repo | **Phoenix1o1/ThermoMade** |
+| D10 | GitHub repo | **Phoenix1o1/ThermoMade**, local folder linked as a git clone |
+| D5 | CYD variant | **2-USB board (USB-C + micro-USB) → ST7789 driver, colour inversion** |
 | — | Extra requirements | Night setback schedule, Android app for the parents, screen off after 30 s, 2-part OpenSCAD box on the 503 box with PSU inside |
 
 ### Still open
@@ -19,7 +20,6 @@
 | ID | Question | Why it matters | Default if unanswered |
 |---|---|---|---|
 | **D13** | **Is neutral (N) present in the 503 box?** | The PSU needs it. The old thermostat probably only had L/open/close | Blocking for the box. If no N: bring one in (electrician) or power via USB from a socket |
-| D5 | Exact CYD variant (1× micro-USB = ILI9341, 2 USB = ST7789)? | Display driver config | ILI9341 |
 | D6 | On total sensor loss: LIMP or FAIL_OFF? | Freeze risk vs cost | LIMP |
 | D8 | Condo plant hours? | Avoid billed minutes on cold water | 24 h |
 | D9 | Toolchain: PlatformIO (pioarduino, core 3.x) or Arduino IDE? | Repo structure, tests | PlatformIO |
@@ -66,7 +66,8 @@
 
 ### Phase 3 — Comfort & family
 
-- [ ] **Enclosure v1** in OpenSCAD per [13](13-enclosure.md) (can start right after the parts arrive)
+- [x] **Enclosure v1** in OpenSCAD ([13](13-enclosure.md)): 2 parts, CAD interference-checked, STLs exported
+- [ ] Fit test print with the real CYD, then the full box; adjust cradles to the real PSU/relay
 - [ ] Web pages: simple (parents) + advanced; JSON API; CSV download; OTA
 - [ ] **Android app v1** ([12](12-android-app.md)) + GitHub Actions APK build, installed on the parents' phones
 - [ ] All CYD screens (Graph, Stats, Schedule, Sensors, Settings), buzzer

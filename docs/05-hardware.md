@@ -56,7 +56,7 @@ PCB ≈ 86 × 50 mm (measure yours for the enclosure).
 | Variant | How to recognise it | Display | Notes |
 |---|---|---|---|
 | Original "R" | 1 × micro-USB | ILI9341 | Most examples target this |
-| "2USB" | USB-C + micro-USB | ST7789 | Needs the ST7789 driver and color inversion. On some boards the green/blue LED pins are swapped |
+| **"2USB" ← Andrea's board** | USB-C + micro-USB | ST7789 | Needs the ST7789 driver and color inversion. On some boards the green/blue LED pins are swapped |
 | Some 2.8" clones | — | ILI9341/ST7789 | Backlight reported on GPIO 27 instead of 21. **Verify before using GPIO 27** |
 
 ### Pin map (base)
@@ -145,8 +145,8 @@ better), ~1.5 m high, interior wall, away from radiators, sun, door, kitchen, TV
 
 ## Enclosure
 
-Two-part parametric OpenSCAD box screwed onto the 503 box. Full spec in
-[13-enclosure](13-enclosure.md).
+Two-part parametric OpenSCAD box screwed onto the 503 box: `hardware/enclosures/termomade_box.scad`,
+print-ready STLs, CYD mechanical data and assembly in [13-enclosure](13-enclosure.md).
 
 ## Phase 0 site survey (checklist)
 
