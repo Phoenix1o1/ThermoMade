@@ -1,0 +1,26 @@
+
+=== WINTER  T_out -2 +-5 C, setpoint 20 C, days 2-4 evaluated ===
+     ctrl  billed_min_day  kWh_per_billed_min  comp_h_day  heat_kWh_day  cycles_day        rms       tmax       tmin    in_band    ret_avg
+     hyst          254.33                0.33        3.47         83.80       28.67       0.50      20.99      19.66      46.46      46.99
+      tpi          176.67                0.47        2.07         82.55       58.67       0.13      20.28      19.76     100.00      35.08
+termomade          177.00                0.47        2.08         82.53       59.00       0.13      20.25      19.70     100.00      35.16
+
+=== COLD    T_out -10 +-5 C, setpoint 20 C, days 2-4 evaluated ===
+     ctrl  billed_min_day  kWh_per_billed_min  comp_h_day  heat_kWh_day  cycles_day        rms       tmax       tmin    in_band    ret_avg
+     hyst          451.50                0.25        6.66        114.70       38.33       0.33      20.67      19.58      52.71      53.40
+      tpi          334.83                0.34        4.54        114.24       67.00       0.14      20.30      19.65      99.60      46.03
+termomade          309.67                0.37        4.06        114.29      103.00       0.07      20.15      19.83     100.00      43.53
+
+=== MILD    T_out +8 +-5 C, setpoint 20 C, days 2-4 evaluated ===
+     ctrl  billed_min_day  kWh_per_billed_min  comp_h_day  heat_kWh_day  cycles_day        rms       tmax       tmin    in_band    ret_avg
+     hyst          104.83                0.42        1.29         44.23       14.67       0.59      21.31      19.76      52.70      39.24
+      tpi           77.00                0.57        0.79         43.85       25.67       0.33      20.72      19.83      56.90      26.62
+termomade           77.00                0.57        0.79         43.65       25.67       0.31      20.70      19.77      62.13      26.48
+
+=== COLD ARRIVAL: house at 8 C, setpoint 20 C, T_out -2 C, first 24 h ===
+     ctrl  t_reach_h  overshoot  billed_min_day  heat_kWh_day  cycles_day
+     hyst      13.73       0.73         1059.50        167.94       15.00
+      tpi      13.98       0.61         1013.00        167.66       30.00
+termomade      13.73       0.43         1009.00        167.24       38.00
+
+plots written to ../../docs/img
