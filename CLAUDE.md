@@ -16,18 +16,21 @@ release the heat. A PI controller picks pulse frequency first and pulse width on
 - Base: **ESP32-2432S028 "CYD", 2-USB variant (USB-C + micro, ST7789 display)** in a 2-part printed box on the old thermostat's **503 box**.
   UI, control, SPDT relay, **local DS18B20** (fused with the room node, learned offset), logging,
   Wi-Fi **AP only**, web pages + JSON API.
-- Room node: **ESP32 DevKit + SHT4x + DS3231 RTC** (system clock after power cuts), ESP-NOW every
-  30 s.
+- Room node: **ESP32 DevKit + SHT4x (or DHT22, build-selectable) + DS3231 RTC** (system clock
+  after power cuts), ESP-NOW every 30 s. Humidity → dew point + "too dry / too humid" advice.
 - Parents: **Android WebView shell app** (binds to the no-internet AP), Italian simple page
   served by the base.
 - Future: bathroom node, outdoor node, pipe node.
 
 ## Status
 
-Phase 0 planning done (2026-11-09). D1–D5, D7, D10 answered (CYD = 2-USB variant, ST7789).
-Enclosure v1 exists: `hardware/enclosures/termomade_box.scad` + STLs (not yet test-printed). **Open: D13 (is neutral in the 503
-box?)** and others in `docs/10-roadmap.md`. **No firmware yet.** Andrea asked for a plan first.
-Write code only when he asks.
+Phase 0 planning done (2026-11-09). D1–D5, D7, D9, D10, D19, D20 answered (CYD = 2-USB variant,
+ST7789; PlatformIO; room sensor SHT4x or DHT22; CYD sensor DS18B20).
+Enclosure v1 exists: `hardware/enclosures/termomade_box.scad` + STLs (not yet test-printed).
+**Firmware v0.1 written (2026-11-09), compiles, 42 native tests pass, NOT yet run on hardware.**
+Bring-up: `firmware/README.md`. **Open: D13 (neutral in the 503 box?), D18 (relay module
+active-HIGH/LOW → `TM_RELAY_ACTIVE_HIGH`), D21 (panel colours/touch cal)** and others in
+`docs/10-roadmap.md`. Next: bench bring-up, then web server/JSON API, OTA, Android app (Phase 3).
 
 ## Hard rules (do not break in code)
 
@@ -61,17 +64,31 @@ per billed minute). Deep night setbacks increase billed time unless recovery is 
 
 ## CYD pins in use
 
-Display HSPI 12/13/14/15/2, BL 21 (off after 30 s idle) · Touch 25/32/39/33/IRQ 36 · SD 18/19/23/5
-· RGB 4/16/17 off (back side, invisible) · LDR 34 · speaker 26 · **relay 22** · **DS18B20 27**
-(verify the backlight isn't on 27 for this board) · 35 spare (input-only).
-Known risk: touch and SD both default to VSPI. Prove the combination first (Phase 1 spike).
+Display HSPI 12/13/14/15/2, BL 21 (off after 30 s idle) · Touch 25/32/39/33/IRQ 36 (**bit-banged**,
+so VSPI stays free for SD) · SD 18/19/23/5 · RGB 4/16/17 off (back side, invisible) · LDR 34 ·
+speaker 26 driven LOW · **relay 22** · **DS18B20 27** (verify the backlight isn't on 27 for this
+board) · 35 spare (input-only). All in `firmware/src/base/base_config.h`.
 
-## Toolchain (proposed, D9)
+## Toolchain (D9: PlatformIO)
 
-VS Code + PlatformIO, **pioarduino** platform (Arduino-ESP32 core 3.x, pinned), LVGL 9 +
-LovyanGFX, ESPAsyncWebServer (ESP32Async), ArduinoJson 7, OneWire/DallasTemperature, RTClib.
-ESP-NOW via IDF `esp_now.h`. The **send callback signature changed in IDF 5.5**
+VS Code + PlatformIO, **pioarduino 55.03.312-1** (Arduino-ESP32 core 3.3.12 / IDF 5.5, pinned).
+LovyanGFX drawn directly (no LVGL in the MVP), own XPT2046/SHT4x/DS3231 drivers,
+OneWire/DallasTemperature, Adafruit DHT (node_dht22 only). Later: ESPAsyncWebServer (ESP32Async),
+ArduinoJson 7. ESP-NOW via IDF `esp_now.h`; the **send callback signature changed in IDF 5.5**
 (`const esp_now_send_info_t*`). Android: Kotlin WebView shell, APK built by GitHub Actions.
+
+Commands (in `firmware/`): `pio test -e native` · `pio run -e base_cyd` · `pio run -e node_sht4x`
+· `pio run -e node_dht22`. After changing the simulator or the control spec, regenerate
+`test/test_golden/golden_data.h` with `python3 tools/sim/gen_golden.py` (not `-I`).
+
+## Firmware map
+
+- `lib/tm_control` (`namespace tmc`): `Controller` = whole thermostat (params, schedule, fusion,
+  PID, modulator, valve FSM, humidity, counters, events). Pure, unit-tested, golden-matched.
+- `lib/tm_protocol` (`tmp`): ESP-NOW frames v1. `lib/tm_util` (`tmu`): CRC, decoders, dates.
+- `src/base`: control task owns Controller + Settings + relay; UI/console/radio talk to it only
+  through `shared.h` (request queue, schedule mailbox, Snapshot).
+- `src/node`: room node (SHT4x | DHT22 + DS3231).
 
 ## Andrea's preferences relevant here
 

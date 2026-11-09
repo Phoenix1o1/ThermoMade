@@ -1,0 +1,7 @@
+{
+  "name": "tm_util",
+  "version": "0.1.0",
+  "description": "TermoMade pure helpers: SHT4x CRC/conversion, DS3231 BCD/epoch, civil time (pure C++17)",
+  "frameworks": "*",
+  "platforms": "*"
+}

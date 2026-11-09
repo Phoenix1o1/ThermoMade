@@ -6,8 +6,9 @@ valve and fuses its own temperature sensor with a **wireless room node** (which 
 clock). A small **Android app** lets the family control it over the house's own Wi-Fi. Fully
 offline: no internet on site. Bathroom/outdoor sensors can be added later.
 
-> Status: **Phase 0: planning.** No firmware yet. The plan, the knowledge base and a thermal
-> simulator are in this repo. Next: decision D13 (neutral in the 503 box?) and the bench spikes.
+> Status: **firmware v0.1 written** (base CYD + room node + 42 native tests), compiles, not yet
+> run on hardware. Next: bench bring-up ([firmware/README.md](firmware/README.md)), decisions
+> D13 (neutral in the 503 box?) and D18 (relay module type).
 
 ## The idea in one paragraph
 
@@ -65,7 +66,7 @@ flowchart LR
 docs/               plan & knowledge base (start here)
 tools/sim/          Python thermal simulator (design tool)
 reference/legacy/   old single-board sketch, kept for reference
-firmware/           PlatformIO monorepo (Phase 1+)
+firmware/           PlatformIO monorepo: base (CYD), room node, libraries, tests
 android/            parents' app (Phase 3)
 hardware/           wiring, enclosures (OpenSCAD), datasheets (Phase 0+)
 CLAUDE.md           context for AI-assisted sessions

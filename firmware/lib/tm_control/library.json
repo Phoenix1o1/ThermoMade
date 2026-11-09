@@ -1,0 +1,8 @@
+{
+  "name": "tm_control",
+  "version": "0.1.0",
+  "description": "TermoMade heating controller: PI + pulse modulator + valve FSM + sensor fusion (pure C++17)",
+  "frameworks": "*",
+  "platforms": "*",
+  "build": { "flags": "-std=gnu++17" }
+}

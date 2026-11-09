@@ -1,0 +1,7 @@
+{
+  "name": "tm_protocol",
+  "version": "0.1.0",
+  "description": "TermoMade ESP-NOW frames shared by all nodes (pure C++17)",
+  "frameworks": "*",
+  "platforms": "*"
+}

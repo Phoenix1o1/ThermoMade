@@ -10,7 +10,8 @@
 
 ## Frame format (protocol v1)
 
-All frames are packed little-endian structs and stay **≤ 250 bytes** (ESP-NOW v1 limit, so every
+Implemented in `firmware/lib/tm_protocol/src/tm_protocol.h` (namespace `tmp`; the names below
+are the doc's). All frames are packed little-endian structs and stay **≤ 250 bytes** (ESP-NOW v1 limit, so every
 chip and IDF version can talk). The node's **MAC address** (from `esp_now_recv_info_t.src_addr`)
 is its identity. Each frame starts with a common header:
 
@@ -50,10 +51,11 @@ typedef struct {
   uint8_t   role;       // role assigned by the base (ROOM_PRIMARY, BATHROOM, OUTDOOR, PIPE, ...)
   uint8_t   report_s;   // requested report interval
   int16_t   setpoint;   // ×100 °C
-  int16_t   control_t;  // ×100 °C
+  int16_t   control_t;  // ×100 °C, INT16_MIN = unknown
   uint8_t   valve;      // 0 closed, 1 open, 2 lockout
-  uint16_t  next_s;     // seconds to next valve action
+  uint16_t  next_s;     // seconds to next valve action, 0xFFFF = none
   uint8_t   mode;
+  uint8_t   alarms;     // low byte of the controller alarm bits
 } TmAck;
 #pragma pack(pop)
 ```
