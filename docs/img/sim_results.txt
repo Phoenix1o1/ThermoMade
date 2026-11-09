@@ -20,7 +20,19 @@ termomade           77.00                0.57        0.79         43.65       25
 === COLD ARRIVAL: house at 8 C, setpoint 20 C, T_out -2 C, first 24 h ===
      ctrl  t_reach_h  overshoot  billed_min_day  heat_kWh_day  cycles_day
      hyst      13.73       0.73         1059.50        167.94       15.00
-      tpi      13.98       0.61         1013.00        167.66       30.00
-termomade      13.73       0.43         1009.00        167.24       38.00
+      tpi      14.35       0.49          986.50        166.96       34.00
+termomade      14.15       0.28          976.00        166.74       45.00
+
+=== NIGHT SETBACK (Comfort 20 C 06:30-22:30), T_out -2 C, days 3-5 ===
+    day-time comfort is the same in all rows; T@06:30 / T@07:30 = room temperature at wake-up
+     ctrl  billed_min_day  heat_kWh_day  kWh_per_billed_min    T@06:30    T@07:30       tmax
+hyst, no setback          254.33         83.79                0.33      20.24      20.27      20.99
+hyst, night 17          344.33         80.21                0.23      16.77      19.59      20.91
+pulse, no setback          177.00         82.53                0.47      20.07      20.04      20.25
+pulse, night 17, fast          251.33         79.49                0.32      16.85      19.12      20.30
+pulse, night 17, efficient          210.00         79.04                0.38      17.27      18.80      20.25
+pulse, night 17, eff, +2h          212.00         80.18                0.38      19.33      19.53      20.27
+pulse, night 18.5, fast          191.67         80.70                0.42      18.43      19.70      20.27
+pulse, night 18.5, eff, +1h          189.00         80.88                0.43      19.62      19.79      20.27
 
 plots written to ../../docs/img

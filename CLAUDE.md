@@ -1,24 +1,32 @@
 # CLAUDE.md — context for AI-assisted work on TermoMade
 
 Read this first, then the doc that matches the task (index in `README.md`).
+GitHub: `Phoenix1o1/ThermoMade`. Local folder name: `TermoMade`.
 
 ## What this is
 
-DIY thermostat for Andrea's mountain house. Centralised condominium heating, very hot supply
-water, **billed by zone-valve open time**. Strategy: **pulse the valve** (open ≈ fill time 3 min,
-then closed while the radiators release the heat) with a PI controller choosing pulse frequency
-first and pulse width only when needed.
+A DIY thermostat for Andrea's mountain house. One big room + bathroom, one heating zone,
+centralised condominium heating with very hot supply water. **Billing: the yearly fuel cost is
+split by valve-open hours × apartment size** (pure time). **No internet on site.**
+Strategy: **pulse the zone valve**. Open ≈ fill time (3 min), then closed while the radiators
+release the heat. A PI controller picks pulse frequency first and pulse width only when needed.
 
-- Base station: **ESP32-2432S028R "CYD"** (2.8" touch). UI, control, relay, logging, web.
-- Room sensor: **ESP32 DevKit + SHT4x**, reports over **ESP-NOW** every 30 s.
-- Future: outdoor (feed-forward, degree-days), bathroom (room policies), pipe node (fill time,
-  plant-off detection).
+- Valve actuator: **Coster CDK 068**, 230 V~, 3-point (common/open/close), 60 s stroke, flow from
+  ~30 s. Its aux microswitch probably feeds the condo meter. **Never touch it.**
+- Base: **ESP32-2432S028R "CYD"** in a 2-part printed box on the old thermostat's **503 box**.
+  UI, control, SPDT relay, **local DS18B20** (fused with the room node, learned offset), logging,
+  Wi-Fi **AP only**, web pages + JSON API.
+- Room node: **ESP32 DevKit + SHT4x + DS3231 RTC** (system clock after power cuts), ESP-NOW every
+  30 s.
+- Parents: **Android WebView shell app** (binds to the no-internet AP), Italian simple page
+  served by the base.
+- Future: bathroom node, outdoor node, pipe node.
 
 ## Status
 
-Phase 0 (planning) complete as of 2026-11-09: docs + simulator. **No firmware yet.** The open
-decisions D1–D12 are in `docs/10-roadmap.md`. Check whether they have been answered before
-designing hardware-dependent code.
+Phase 0 planning done (2026-11-09). D1–D4, D7, D10 answered. **Open: D13 (is neutral in the 503
+box?)** and others in `docs/10-roadmap.md`. **No firmware yet.** Andrea asked for a plan first.
+Write code only when he asks.
 
 ## Hard rules (do not break in code)
 
@@ -26,54 +34,60 @@ designing hardware-dependent code.
    manual commands, not setpoint changes, not a reboot (boot starts in lockout).
 2. **ON_MIN (default 180 s)** applies to every automatic close. Only user OFF, faults and
    plant-off may close earlier.
-3. **Only the valve FSM touches the relay pin** (GPIO 22). Everything else sends requests.
-4. Relay de-energised = valve closed. Hardware pull-down; safe through boot/flash/crash.
-5. Total sensor loss → **LIMP** (open-loop at learned duty, capped at 0.30) by default, not OFF.
-   The house must not freeze.
-6. Setpoints are clamped to 5–25 °C at every input path.
-7. Control logic (`firmware/lib/tm_control`) is **pure C++ with injected time**: no Arduino
-   includes, unit-tested natively, behaviour matching `tools/sim/thermal_sim.py`.
+3. **Only the valve FSM touches the relay pin** (GPIO 22). Relay energised = L→OPEN,
+   de-energised = L→CLOSE. Hardware pull-down; safe through boot/flash/crash.
+4. Total sensor loss → **LIMP** (open-loop at learned duty, capped at 0.30) by default, not OFF.
+5. Setpoints are clamped to 5–25 °C at every input path.
+6. Control logic (`firmware/lib/tm_control`) is **pure C++ with injected time**: no Arduino
+   includes, unit-tested natively, behaviour matching `tools/sim/thermal_sim.py`
+   (`PID`, `PulseModulator`, `TermoMade`, `Schedule`).
+7. Everything works offline. No feature may depend on internet.
 
 ## Key parameters (source of truth: `docs/04-control-algorithm.md` §7)
 
 ON_MIN 180 s · OFF_MIN 300 s · tick 30 s · EMA τ 120 s · KP 0.6/°C · TI 120 min · TD 0 ·
-U_MIN 0.03 · U_CONT 0.90 · uc = ON_MIN/(ON_MIN+OFF_MIN) = 0.375 · STALE 300 s ·
-I0 0.15 · MAX_CYCLES_PER_HOUR 8.
+I_BAND 1.0 °C (+ coast after setpoint decrease) · U_MIN 0.03 · U_CONT 0.90 · uc = 0.375 ·
+STALE 300 s · I0 0.15 · MAX_CYCLES_PER_HOUR 8 · W_ROOM 0.7 · TAU_OFF 6 h ·
+Comfort 20.0 / Night 18.5 / Away 7.0 °C · schedule Comfort 06:30–22:30 ·
+recovery EFFICIENT (u ≤ uc) for scheduled rises, FAST for arrival/boost.
 
 Modulator: u ≤ uc → ON = ON_MIN, OFF = ON_MIN·(1−u)/u; uc < u < U_CONT → OFF = OFF_MIN,
 ON = OFF_MIN·u/(1−u); u ≥ U_CONT → continuous; u < U_MIN → no pulses.
 
-## Toolchain (proposed, D9)
-
-VS Code + PlatformIO, **pioarduino** platform (Arduino-ESP32 core 3.x, pinned release), LVGL 9 +
-LovyanGFX, ESPAsyncWebServer (ESP32Async), ArduinoJson 7. ESP-NOW via IDF `esp_now.h`.
-Note: the ESP-NOW **send callback signature changed in IDF 5.5** (`const esp_now_send_info_t*`).
+Key finding: under time billing, **continuous ON is the expensive regime** (≈ 0.13 vs 0.47 kWh
+per billed minute). Deep night setbacks increase billed time unless recovery is pulse-only
+(docs/04 §5).
 
 ## CYD pins in use
 
-Display HSPI 12/13/14/15/2, BL 21 · Touch 25/32/39/33/36 · SD 18/19/23/5 · RGB 4/16/17
-(active LOW) · LDR 34 · speaker 26 · **relay 22** · **1-Wire 27** (verify the backlight isn't on 27
-for this board) · **valve-sense 35** (input-only).
+Display HSPI 12/13/14/15/2, BL 21 (off after 30 s idle) · Touch 25/32/39/33/IRQ 36 · SD 18/19/23/5
+· RGB 4/16/17 off (back side, invisible) · LDR 34 · speaker 26 · **relay 22** · **DS18B20 27**
+(verify the backlight isn't on 27 for this board) · 35 spare (input-only).
 Known risk: touch and SD both default to VSPI. Prove the combination first (Phase 1 spike).
+
+## Toolchain (proposed, D9)
+
+VS Code + PlatformIO, **pioarduino** platform (Arduino-ESP32 core 3.x, pinned), LVGL 9 +
+LovyanGFX, ESPAsyncWebServer (ESP32Async), ArduinoJson 7, OneWire/DallasTemperature, RTClib.
+ESP-NOW via IDF `esp_now.h`. The **send callback signature changed in IDF 5.5**
+(`const esp_now_send_info_t*`). Android: Kotlin WebView shell, APK built by GitHub Actions.
 
 ## Andrea's preferences relevant here
 
-- Enclosures/3D parts: **parametric OpenSCAD**, **no small radii/fillets** (hard to print).
-- Hobby electronics background (ESP32, ESP8266, CYD considered before, Home Assistant planned
-  for other projects, no MQTT broker yet).
-- Wants a plan before code. Keep docs in sync when decisions change: update
-  `docs/10-roadmap.md` decisions table and the parameter table in `docs/04`.
+- Enclosures/3D parts: **parametric OpenSCAD** with live preview, **no small radii/fillets**
+  (chamfers or large radii). Spec: `docs/13-enclosure.md`.
+- Parent-facing UI in Italian. Docs and code in English.
+- Plan before code. Keep docs in sync when decisions change: decisions table in
+  `docs/10-roadmap.md`, parameter table in `docs/04`.
 
 ## Conventions
 
 C++17, units in names (`_c`, `_s`, `_ms`), monotonic `uint32_t` ms with unsigned subtraction,
 no `String` building in hot paths, no blocking delays outside `setup()`, secrets in git-ignored
-`firmware/include/secrets.h`. Protocol structs only in `firmware/lib/tm_protocol` (shared by all
-nodes). Frames ≤ 250 bytes.
+`firmware/include/secrets.h`. Protocol structs only in `firmware/lib/tm_protocol`, frames ≤ 250 B.
 
 ## Where things are
 
-- Legacy sketch and its review: `reference/legacy/Termostato.ino`, `docs/11-legacy-review.md`
-- Simulator: `tools/sim/thermal_sim.py` (PID, PulseModulator, TermoMade classes = reference
-  implementation)
-- Plots/results: `docs/img/`
+- Legacy sketch + review: `reference/legacy/Termostato.ino`, `docs/11-legacy-review.md`
+- Simulator: `tools/sim/thermal_sim.py`; results/plots: `docs/img/`
+- Android app plan: `docs/12-android-app.md`; enclosure spec: `docs/13-enclosure.md`

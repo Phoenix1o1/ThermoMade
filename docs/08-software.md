@@ -22,10 +22,12 @@
 | Web server | **ESPAsyncWebServer + AsyncTCP** (ESP32Async org) | Non-blocking, unlike the legacy `WebServer` |
 | JSON | **ArduinoJson 7** | Config, API |
 | T/RH sensor | Sensirion `arduino-i2c-sht4x` (or Adafruit SHT4x) | |
-| 1-Wire | OneWire + DallasTemperature | Optional DS18B20s |
+| 1-Wire | OneWire + DallasTemperature | CYD local DS18B20 (non-blocking: request, read 750 ms later) |
+| RTC (room node) | RTClib (Adafruit) or a 50-line DS3231 driver | DS3231 on the node's I²C bus |
 | Storage | Preferences (NVS), LittleFS (web app), SD (logs) | Built into the core |
 | ESP-NOW | ESP-IDF `esp_now.h` behind our own small wrapper | Fewer surprises than higher-level wrappers |
-| Time | ESP-IDF SNTP + POSIX TZ `CET-1CEST,M3.5.0,M10.5.0/3` | Europe/Rome |
+| Time | `settimeofday()` from node RTC / phone + POSIX TZ `CET-1CEST,M3.5.0,M10.5.0/3` | Europe/Rome. No NTP (no internet) |
+| i18n | Simple string table (it/en), Italian default for parent-facing text | CYD + web simple page |
 | Charts (web) | uPlot | Tiny, served gzipped from LittleFS |
 
 ## Repository layout (target)
@@ -36,8 +38,9 @@ TermoMade/
 ├── docs/                      ← this plan and knowledge base
 ├── reference/legacy/          ← old Termostato.ino (read-only)
 ├── tools/sim/                 ← Python thermal simulator (design tool)
+├── android/                   ← Kotlin WebView shell app for the parents (docs/12) + GitHub Actions APK build
 ├── hardware/
-│   ├── enclosures/            ← OpenSCAD parametric models (no small radii)
+│   ├── enclosures/            ← termomade_box.scad (docs/13), node case; parametric, no small radii
 │   ├── wiring/                ← wiring diagrams, photos from the site survey
 │   └── datasheets/            ← links / PDFs (CYD, SHT4x, relay, valve actuator)
 └── firmware/
@@ -67,7 +70,7 @@ the control tests on the PC in seconds.
 |---|---|---|---|
 | `control` | 1 | 1 s (tick 30 s for PI) | Valve FSM, relay pin, PI state, node registry, billed counter. **Task watchdog enabled** |
 | `ui` (Arduino loop) | 1 | ~5 ms `lv_timer_handler()` | LVGL, LED, buzzer |
-| `net` | 0 | event-driven | Wi-Fi, web server (async), NTP, MQTT |
+| `net` | 0 | event-driven | Wi-Fi AP, web server (async), mDNS |
 | `logger` | 0 | 60 s | RAM ring buffer, SD writes (buffered, one write/min) |
 | Wi-Fi task (system) | 0 | — | ESP-NOW callbacks → queue to `control` |
 
@@ -97,6 +100,13 @@ validated by `control`.
 6. `Adafruit_NeoPixel::setBrightness()` is lossy. Irrelevant now, but a reminder from the legacy
    code not to double-scale colors.
 7. NVS: write settings debounced (10 s), `I` every 30 min, counters every 10 min.
-8. Self-heating of sensor nodes (see [05](05-hardware.md#room-sensor-node-esp32-devkit)).
-9. LVGL 9 API differs from LVGL 8 (display/driver creation, `lv_display_*`). Don't mix example
+8. Self-heating of sensor nodes (see [05](05-hardware.md#room-node-esp32-devkit)).
+9. Partition table: 4 MB flash with two OTA slots (~1.6 MB each) leaves little LittleFS. Keep the
+   web app small (gzipped, uPlot) and the logs on microSD. Measure the LVGL + web + ESP-NOW image
+   size early (Phase 1).
+10. DS3231 "ZS-042" modules try to charge the coin cell. Remove the diode/resistor when using a
+   CR2032.
+11. Android talking to a no-internet AP: bind to the network or traffic goes to mobile data
+   ([12](12-android-app.md)).
+12. LVGL 9 API differs from LVGL 8 (display/driver creation, `lv_display_*`). Don't mix example
    code from v8.

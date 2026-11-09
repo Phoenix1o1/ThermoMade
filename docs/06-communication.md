@@ -38,13 +38,15 @@ typedef struct {
   uint8_t   status;     // sensor error bits
   uint16_t  battery_mv; // 0 = USB powered
   uint16_t  uptime_min;
+  uint32_t  rtc_time;   // unix time from the node's DS3231, 0 = no RTC / invalid
   uint8_t   count;      // number of readings (≤ 16)
   TmReading r[16];
-} TmTelemetry;          // 17 + 4·count bytes
+} TmTelemetry;          // 21 + 4·count bytes
 
 typedef struct {
   TmHeader  h;          // type = TM_ACK
   uint32_t  unix_time;  // 0 = base has no valid time
+  uint8_t   time_src;   // 0 none, 1 node RTC, 2 phone (best). Node sets its RTC if src = 2 and drift > 2 s
   uint8_t   role;       // role assigned by the base (ROOM_PRIMARY, BATHROOM, OUTDOOR, PIPE, ...)
   uint8_t   report_s;   // requested report interval
   int16_t   setpoint;   // ×100 °C
@@ -98,15 +100,30 @@ sequenceDiagram
 
 ## Channel handling
 
-ESP-NOW peers must be on the **same Wi-Fi channel** as the base's active interface.
+The house has no internet, so the base runs **AP only on a fixed channel** (default 1, configurable
+in Settings). Nodes use the channel they stored at pairing. ESP-NOW and the AP share the radio
+without problems.
 
-- **AP-only base:** fixed channel (default 1, configurable). Simple.
-- **AP+STA base:** the channel follows the home router and can change. Nodes store the last good
-  channel. After **3 consecutive send failures** (no MAC ACK) they **scan channels 1–13**
-  sending a HELLO on each until the base answers. Battery nodes keep the channel in RTC memory
-  between deep sleeps.
-- The base disables Wi-Fi modem power-save (`WIFI_PS_NONE`), otherwise received ESP-NOW frames can be
-  missed while it is joined to a router.
+*If an STA mode (home router) is ever added:* the channel would follow the router. Nodes
+would then rescan channels 1–13 after 3 consecutive send failures (HELLO on each channel until the
+base answers), and the base would disable modem power-save (`WIFI_PS_NONE`) so it doesn't miss
+frames.
+
+## Time distribution
+
+```mermaid
+sequenceDiagram
+  participant P as Phone app
+  participant B as Base
+  participant N as Room node (DS3231)
+  Note over B: boot after power cut, time unknown
+  N->>B: TM_TELEMETRY (rtc_time = 1794215700)
+  B->>B: set clock (src = node RTC)
+  P->>B: POST /api/time (phone time, tz)
+  B->>B: set clock (src = phone)
+  B->>N: TM_ACK (unix_time, time_src = 2)
+  N->>N: |drift| > 2 s → write DS3231
+```
 
 ## Timing & reliability
 
@@ -134,5 +151,6 @@ ESP-NOW peers must be on the **same Wi-Fi channel** as the base's active interfa
 
 ## Base ↔ phone (Wi-Fi)
 
-HTTP JSON API + static web app served by the base. See [07](07-user-interface.md#web-ui).
-Optional (if internet): MQTT to Home Assistant with discovery (climate entity + sensors).
+HTTP JSON API + web pages served by the base on its own AP. The parents' Android app wraps them
+([12](12-android-app.md)), and any browser works too ([07](07-user-interface.md#web-ui)). No
+internet involved. If the house ever gets internet: MQTT / Home Assistant discovery can be added.

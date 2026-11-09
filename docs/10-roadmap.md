@@ -1,84 +1,99 @@
-# 10 — Roadmap & open decisions
+# 10 — Roadmap & decisions
 
-## Open decisions (answer these first)
+## Decisions
+
+### Answered (2026-11-09)
+
+| ID | Question | Answer → consequence |
+|---|---|---|
+| D1 | What does the old thermostat switch? | **230 V, 3 wires: common / open / close** → one SPDT relay: COM = L, NO = OPEN, NC = CLOSE |
+| D2 | Valve actuator? | **Coster CDK 068**, motorised 3-point, ~30 s to open (aux switch at mid-stroke; 60 s full stroke) |
+| D3 | Meter / billing? | **Yearly fuel split by valve hours × apartment size** → pure time, savings are real |
+| D4 | Internet at the house? | **None** → AP only, RTC on the room node + phone time sync, local-only Android app |
+| D7 | Rooms / sensors | **One big room + bathroom, one zone.** Second sensor **on the CYD**, fused with the room node |
+| D10 | GitHub repo | **Phoenix1o1/ThermoMade** |
+| — | Extra requirements | Night setback schedule, Android app for the parents, screen off after 30 s, 2-part OpenSCAD box on the 503 box with PSU inside |
+
+### Still open
 
 | ID | Question | Why it matters | Default if unanswered |
 |---|---|---|---|
-| **D1** | What does the old thermostat switch: 230 V AC, 24 V, or a dry contact into a condo module? | Relay type, safety, enclosure | Assume 230 V, so a properly isolated relay |
-| **D2** | Valve actuator type (motorised / thermoelectric), stroke time, end-switch? | Billing start, ON_MIN/OFF_MIN validity, valve-sense option | Motorised, ~30–60 s |
-| **D3** | Meter type: pure time, compensated time (UNI/TR 11388), or heat meter? | How much pulsing saves | Pure/compensated time (as described) |
-| **D4** | Internet / Wi-Fi at the house? | NTP, remote access, pre-heat, HA/MQTT | AP-only, offline |
-| **D5** | Exact CYD variant (1× micro-USB = ILI9341, or 2× USB = ST7789)? | Display driver config | ILI9341 |
-| **D6** | On total sensor loss: LIMP (keep pulsing at learned duty) or FAIL_OFF? | Freeze risk vs cost | LIMP |
-| **D7** | Where can base and room node go? Distance and walls? Sockets nearby? | Placement, link, power | Base at old thermostat, node in living room |
-| **D8** | Condo plant hours? | Avoid billed minutes on cold water | 24 h (no gating) |
-| **D9** | Toolchain: PlatformIO (pioarduino, core 3.x) or Arduino IDE? | Repo structure, tests | PlatformIO |
-| **D10** | GitHub repo name/visibility | — | Private `TermoMade` |
-| **D11** | Radiators: number, material, TRVs? | Model calibration, fill time | 8 aluminium, TRVs open |
-| **D12** | Antifreeze setpoint while away | Freeze protection vs cost | 7 °C |
+| **D13** | **Is neutral (N) present in the 503 box?** | The PSU needs it. The old thermostat probably only had L/open/close | Blocking for the box. If no N: bring one in (electrician) or power via USB from a socket |
+| D5 | Exact CYD variant (1× micro-USB = ILI9341, 2 USB = ST7789)? | Display driver config | ILI9341 |
+| D6 | On total sensor loss: LIMP or FAIL_OFF? | Freeze risk vs cost | LIMP |
+| D8 | Condo plant hours? | Avoid billed minutes on cold water | 24 h |
+| D9 | Toolchain: PlatformIO (pioarduino, core 3.x) or Arduino IDE? | Repo structure, tests | PlatformIO |
+| D11 | Radiators: number, material, TRVs? | Model calibration | Aluminium, TRVs open |
+| D12 | Antifreeze setpoint while away | Freeze protection vs cost | 7 °C |
+| D14 | Is the CDK 068 aux switch wired to the condo counter? | Only informative. We never touch it | Assume yes |
+| D15 | UI language for parents | CYD + app text | Italian |
+| D16 | Night setback: how cool, and when? Under time billing deep setbacks **cost** hours ([04 §5](04-control-algorithm.md#5-recovery-cold-start-morning-boost)) | Comfort vs cost | Comfort 20 °C 06:30–22:30, Night 18.5 °C, efficient recovery |
+| D17 | Parents' phones: Android version? | App needs Android 10+ | Android 10+ |
 
 ## Phases
 
-### Phase 0 — Groundwork (now)
+### Phase 0 — Groundwork
 
-- [x] Concept, control design, simulation, knowledge base (this repo)
-- [ ] Answer D1–D12
-- [ ] Site survey checklist ([05](05-hardware.md#phase-0-site-survey-checklist)), photos into `hardware/wiring/`
-- [ ] Order parts (BOM in [05](05-hardware.md#bill-of-materials-mvp))
+- [x] Concept, control design, simulation, knowledge base
+- [x] D1–D4, D7, D10 answered
+- [ ] D13 (neutral) and site survey ([05](05-hardware.md#phase-0-site-survey-checklist)), photos into `hardware/wiring/`
+- [ ] Last season's statement: hours → baseline
+- [ ] Order parts ([BOM](05-hardware.md#bill-of-materials-mvp))
 
-**Done when:** wiring known, parts on the bench, decisions recorded in this table.
+### Phase 1 — Bench spikes (de-risk)
 
-### Phase 1 — Bench spikes (de-risk the unknowns)
+- [ ] CYD: display + touch + **microSD together** (LovyanGFX + LVGL 9), backlight off/wake on touch IRQ
+- [ ] CYD: DS18B20 on GPIO 27 (verify that pin isn't the backlight on this board), relay on GPIO 22
+      stays off through boot/flash/reset
+- [ ] Room node: SHT4x + DS3231 on one I²C bus, ESP-NOW to the CYD AP (fixed channel), RTC time in
+      telemetry
+- [ ] Self-heating test: CYD sensor in a mock-up chamber vs room node vs reference thermometer (24 h)
+- [ ] Firmware image size (LVGL + web + ESP-NOW) vs the OTA partition plan
+- [ ] Android: connect + bind to a no-internet ESP32 AP from the parents' phone model
 
-- [ ] CYD: display + touch + **microSD at the same time** with LovyanGFX + LVGL 9 (gotcha #1)
-- [ ] ESP-NOW link DevKit → CYD with the CYD in AP and in AP+STA (channel scan works)
-- [ ] SHT4x node: self-heating test in the planned enclosure vs reference thermometer (24 h)
-- [ ] Relay stage on GPIO 22: stays off through boot/flash/reset (scope or LED)
-- [ ] Measure ESP-NOW range at the real distances (RSSI)
-
-**Done when:** each spike has a minimal sketch in `firmware/spikes/` and a note in this doc.
-
-### Phase 2 — MVP (control works, minimal UI)
+### Phase 2 — MVP (control works in the house)
 
 - [ ] `tm_protocol`, `tm_control` libraries + native unit tests (min-time fuzz test passes)
-- [ ] Sensor firmware v1 (telemetry, ACK, pairing, LED)
-- [ ] Base: control task, valve FSM, PI + modulator, fallback/LIMP, NVS persistence, watchdog
-- [ ] Base UI: Home screen + Diagnostics. Serial CLI
+- [ ] Room node firmware v1 (telemetry, RTC, ACK, pairing, LED)
+- [ ] Base: control task, valve FSM, PI + modulator, **sensor fusion + learned offset**, fallback/LIMP,
+      NVS, watchdog, **time from RTC/phone**, **schedule (Comfort/Night) with efficient recovery**
+- [ ] Base UI: Home screen (Italian) with **screen off after 30 s**, Diagnostics, serial CLI
 - [ ] Logging: RAM buffer + SD CSV + events + daily summary
-- [ ] Changeover switch + (optional) valve-sense input installed
-- [ ] **Shadow mode** week (baseline), then go live
+- [ ] Temporary enclosure (or v1 of the printed one) + safe mains wiring
+- [ ] Install, run 1–2 weeks, then CLASSIC alternate days for the A/B comparison
 
 **Done when:** MVP acceptance criteria in [01](01-requirements.md#acceptance-criteria-mvp) pass.
 
-### Phase 3 — Comfort features
+### Phase 3 — Comfort & family
 
-- [ ] All CYD screens (Graph, Stats, Sensors, Settings), LED + buzzer
-- [ ] Web UI + JSON API + CSV download + browser time sync
-- [ ] Modes + weekly schedule + plant hours + boost
-- [ ] OTA for the base
-- [ ] Enclosures v1 (OpenSCAD) for base and room node
+- [ ] **Enclosure v1** in OpenSCAD per [13](13-enclosure.md) (can start right after the parts arrive)
+- [ ] Web pages: simple (parents) + advanced; JSON API; CSV download; OTA
+- [ ] **Android app v1** ([12](12-android-app.md)) + GitHub Actions APK build, installed on the parents' phones
+- [ ] All CYD screens (Graph, Stats, Schedule, Sensors, Settings), buzzer
+- [ ] Modes: Away until date, Boost, plant hours; fixed 1 h pre-heat
 
 ### Phase 4 — Extensions
 
-- [ ] Outdoor node + HDD stats + feed-forward
-- [ ] Bathroom node + room policies (WEIGHTED / COLDEST)
-- [ ] Pipe node + adaptive fill time + plant-off detection + heat per pulse
-- [ ] Wi-Fi STA + NTP; MQTT / Home Assistant; remote pre-heat (if D4 = yes)
+- [ ] Bathroom node + COLDEST policy for mornings
+- [ ] Outdoor node + HDD on site + feed-forward
+- [ ] Learned optimum start (warm-up rate)
+- [ ] Pipe node + adaptive fill time + plant-off detection
+- [ ] `tools/sim/fit.py`: calibrate the model from logs, re-tune; decide the night setback with data
 - [ ] ESP-NOW encryption, node OTA
-- [ ] `tools/sim/fit.py`: calibrate the model from logs, re-tune
 
-### Phase 5 — Learning & polish
+### Phase 5 — Season review
 
-- [ ] Auto-learned ON_MIN, K_ff, warm-up rate (pre-heat timing), overshoot learning
-- [ ] A/B report after a season: savings per HDD, comfort, valve cycles
+- [ ] Season hours/HDD vs last season. PULSE vs CLASSIC report. Valve cycles
 
 ## Risks
 
 | Risk | Mitigation |
 |---|---|
-| Billing turns out to be a real heat meter | Comfort gain still holds. Measure before investing in Phase 4 |
-| Valve/actuator wear from 2–3× more cycles | Cycle counter, `MAX_CYCLES_PER_HOUR`, OFF_MIN ≥ 5 min, check actuator rating |
-| Condo rules about the thermostat | Only the thermostat contact is replaced. Meter and valve are untouched. Old thermostat kept as bypass |
-| Mains wiring in a DIY enclosure | Certified relay, separation, fuse, or electrician. Low-voltage-only CYD side |
-| Sensor self-heating / bad placement | Enclosure baffle, calibration, plausibility checks, fallback chain |
-| Unattended house + firmware bug | Watchdog, LIMP default, bypass switch, antifreeze in OFF mode |
+| No neutral at the 503 box | D13 first. Alternatives: bring N, or USB power from a socket |
+| 230 V in a DIY box | Mains parts in a closed pocket inside the 503 box, fuse, enclosed PSU, terminal block, ≥ 6 mm clearances, PETG/ASA (V-0 better). Electrician if unsure |
+| Valve/actuator wear from 2–3× more cycles (each move = 60 s motor run) | Cycle counter, MAX_CYCLES_PER_HOUR, OFF_MIN ≥ 5 min |
+| Night setback raising the bill | Efficient recovery + shallow default + measure both ways |
+| Time lost after power cut | DS3231 on the room node + phone sync. Schedule falls back to Comfort if unknown |
+| CYD sensor biased by box heat | Separate vented chamber, PSU in the wall pocket, learned offset, screen off |
+| Parents stuck if electronics fail | Keep the old thermostat as a spare. Short Italian "what to do" card next to the box |
+| Condo rules | Only the thermostat is replaced. Actuator, aux switch and meter untouched |

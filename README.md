@@ -1,11 +1,13 @@
 # TermoMade
 
 **Pulse-controlled zone-valve thermostat for a mountain house on time-billed central heating.**
-Two ESP32s: a **CYD touchscreen base station** that drives the valve, and a **wireless room
-sensor**. Outdoor, bathroom and pipe sensors can be added later.
+A **CYD touchscreen base station** (on the old thermostat's 503 box) drives the Coster 3-point
+valve and fuses its own temperature sensor with a **wireless room node** (which also keeps the
+clock). A small **Android app** lets the family control it over the house's own Wi-Fi. Fully
+offline: no internet on site. Bathroom/outdoor sensors can be added later.
 
 > Status: **Phase 0: planning.** No firmware yet. The plan, the knowledge base and a thermal
-> simulator are in this repo.
+> simulator are in this repo. Next: decision D13 (neutral in the 503 box?) and the bench spikes.
 
 ## The idea in one paragraph
 
@@ -24,15 +26,19 @@ Simulation (`tools/sim`, guessed plant parameters) vs a classic ±0.2 °C thermo
 | Billed valve time, winter day | 254 min | **177 min (−30 %)** |
 | Compensated meter units (UNI/TR 11388-like) | 3.47 | **2.08 (−40 %)** |
 | Room temperature RMS error | 0.50 °C | **0.13 °C** |
-| Overshoot after cold arrival | 0.73 °C | **0.43 °C** |
+| Overshoot after cold arrival | 0.73 °C | **0.28 °C** |
 | Valve cycles/day | 29 | 59 |
+
+Caution: under time billing a **deep night setback raises billed time** (morning recovery with the
+valve wide open is the least efficient regime). The default is a shallow, pulse-only recovered
+night. See [04 §5](docs/04-control-algorithm.md#5-recovery-cold-start-morning-boost).
 
 ```mermaid
 flowchart LR
-  N["Room node<br/>ESP32 + SHT4x"] -- ESP-NOW --> B["Base: CYD 2.8&quot;<br/>PI + pulse modulator"]
-  B -- relay --> V["Zone valve<br/>(billed while open)"]
-  P["Phone"] -- Wi-Fi --> B
-  F["Future: outdoor / bathroom / pipe nodes"] -.-> B
+  N["Room node<br/>ESP32 + SHT4x + RTC"] -- ESP-NOW --> B["Base: CYD 2.8&quot; + DS18B20<br/>PI + pulse modulator"]
+  B -- "SPDT relay<br/>L→OPEN / L→CLOSE" --> V["Coster CDK 068<br/>(billed while open)"]
+  P["Parents' Android app"] -- "Wi-Fi AP (offline)" --> B
+  F["Future: bathroom / outdoor nodes"] -.-> B
 ```
 
 ## Documentation
@@ -48,8 +54,10 @@ flowchart LR
 | [07 User interface](docs/07-user-interface.md) | CYD screens, LED, buzzer, web UI, JSON API, serial CLI |
 | [08 Software](docs/08-software.md) | Toolchain, libraries, repo layout, task model, conventions, gotchas |
 | [09 Logging & evaluation](docs/09-logging-evaluation.md) | CSV formats, KPIs, baseline vs TermoMade A/B protocol |
-| [10 Roadmap](docs/10-roadmap.md) | **Open decisions D1–D12**, phases, risks |
+| [10 Roadmap](docs/10-roadmap.md) | **Decisions (answered + open)**, phases, risks |
 | [11 Legacy review](docs/11-legacy-review.md) | What the old `Termostato.ino` really did, bugs, what we keep |
+| [12 Android app](docs/12-android-app.md) | Parents' app: WebView shell, binding to the offline AP, build & install |
+| [13 Enclosure](docs/13-enclosure.md) | 2-part OpenSCAD box on the 503 box: layout, parameters, mains safety |
 
 ## Repository layout
 
@@ -58,6 +66,7 @@ docs/               plan & knowledge base (start here)
 tools/sim/          Python thermal simulator (design tool)
 reference/legacy/   old single-board sketch, kept for reference
 firmware/           PlatformIO monorepo (Phase 1+)
+android/            parents' app (Phase 3)
 hardware/           wiring, enclosures (OpenSCAD), datasheets (Phase 0+)
 CLAUDE.md           context for AI-assisted sessions
 ```

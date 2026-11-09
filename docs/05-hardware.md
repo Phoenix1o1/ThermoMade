@@ -1,13 +1,57 @@
 # 05 — Hardware
 
+## Valve actuator: Coster CDK 068 (existing, do not modify)
+
+| Item | Value |
+|---|---|
+| Type | Reversible rotary actuator (90°) for Coster ball / ceramic-disc valves |
+| Supply | 230 V~ ±10 %, 50–60 Hz, 4 VA |
+| Control | **3-point**: common (N), open, close. Needs a **changeover (SPDT) contact** |
+| Run time | 60 s for 90° (datasheet). Flow starts around mid-stroke ≈ 30 s (what you observed) |
+| Limit switches | Internal, cut the motor at both ends. L may stay applied permanently |
+| Auxiliary microswitch | Changeover, switches at ~mid-stroke, 250 V~ 5(1) A. **Most likely wired to the condominium hour counter. Leave it alone** |
+| Delivered | Closed |
+
+The old thermostat's three wires in the 503 box are therefore:
+**L (thermostat common) / OPEN / CLOSE**. The thermostat puts L on OPEN or on CLOSE.
+
+## Relay stage (replaces the thermostat contact)
+
+```
+            503 wall box                          printed box, mains pocket
+  L  ───────────────────────────────┬────────► relay COM
+                                    │          relay NO  ─────────► OPEN  (to actuator)
+                                    │          relay NC  ─────────► CLOSE (to actuator)
+                                    └──[fuse T500mA]──► PSU 230 V~ L
+  N  (needed for the PSU, see D13) ─────────► PSU 230 V~ N
+                                               PSU 5 V ──► CYD (P1/USB 5 V), relay coil
+  CYD GPIO22 ──1 kΩ──► driver/opto input of relay module (10 kΩ pull-down to GND)
+```
+
+- **Relay energised = OPEN, de-energised = CLOSE.** A crash, a reboot or a dead PSU all drive
+  the valve **closed**, which is the same as the old thermostat when satisfied.
+- **Relay module:** 1-channel 5 V module with **changeover contacts (COM/NO/NC)**, driver
+  transistor + flyback diode, ideally optocoupled, contacts rated ≥ 250 V~ / 5 A (the actual load
+  is 4 VA). Prefer modules with a milled slot or large gap between the contact traces and the
+  low-voltage side. For better isolation, use a Finder 34.51 (5 V coil) on a small carrier.
+- **Only one relay is needed.** The SPDT contact gives both directions, exactly like the old
+  thermostat.
+- **Default state:** GPIO 22 is not a strapping pin. The pull-down keeps the relay off while the
+  ESP32 boots or is flashed.
+- **Neutral:** the actuator's N goes straight to the actuator, so the old thermostat box probably
+  has **only L, OPEN, CLOSE**. The PSU needs **N**. Check the 503 box (decision D13). If there is
+  no N: bring one from the nearest junction box (electrician), or power the CYD from a USB
+  adapter in a nearby socket.
+- **Never touch** the actuator's auxiliary switch, the meter, or anything in the condominium
+  box.
+
 ## Base station: CYD (ESP32-2432S028R)
 
-ESP32-WROOM-32 (dual core 240 MHz, 520 KB SRAM, 4 MB flash, no PSRAM), 2.8" 320×240 TFT,
-XPT2046 resistive touch, microSD, RGB LED, LDR, speaker amplifier, USB-serial (CH340).
+ESP32-WROOM-32 (240 MHz dual core, 520 KB SRAM, 4 MB flash, no PSRAM), 2.8" 320×240 TFT,
+XPT2046 resistive touch, microSD, RGB LED (back side), LDR, speaker amp, CH340 USB-serial.
+PCB ≈ 86 × 50 mm (measure yours for the enclosure).
 
 ### CYD variants
-
-Check yours before writing display code:
 
 | Variant | How to recognise it | Display | Notes |
 |---|---|---|---|
@@ -15,115 +59,70 @@ Check yours before writing display code:
 | "2USB" | USB-C + micro-USB | ST7789 | Needs the ST7789 driver and color inversion. On some boards the green/blue LED pins are swapped |
 | Some 2.8" clones | — | ILI9341/ST7789 | Backlight reported on GPIO 27 instead of 21. **Verify before using GPIO 27** |
 
-### Pin map
+### Pin map (base)
 
 | GPIO | Function on the board | TermoMade use |
 |---|---|---|
-| 12, 13, 14, 15, 2 | TFT SPI (HSPI): MISO, MOSI, SCLK, CS, DC | Display |
-| 21 | TFT backlight | Backlight PWM (dimming via LDR) |
-| 25, 32, 39, 33, 36 | Touch XPT2046: CLK, MOSI, MISO, CS, IRQ | Touch |
-| 18, 19, 23, 5 | microSD (VSPI): SCK, MISO, MOSI, CS | Logging |
-| 4 / 16 / 17 | RGB LED R / G / B (**active LOW**) | Status LED (legacy color semantics) |
-| 34 | LDR (input only) | Auto-dim backlight at night |
-| 26 | Speaker amplifier input | Alarm beeps |
-| 0 | BOOT button | Long-press at boot = factory reset (planned) |
-| 1 / 3 | UART0 TX/RX (CH340), connector P1 | Serial debug / CLI |
-| **22** | Free (P3 and CN1) | **Relay output** |
-| **27** | Free (CN1) — *check backlight variant* | **1-Wire bus** (optional DS18B20s) |
-| **35** | Free (P3), **input-only, no pull-up** | **Valve-sense input** (optional, via optocoupler) |
+| 12, 13, 14, 15, 2 | TFT SPI (HSPI) | Display |
+| 21 | TFT backlight | PWM: **off after 30 s idle**, LDR-scaled when on |
+| 25, 32, 39, 33, 36 | Touch XPT2046 | Touch (IRQ 36 wakes the screen) |
+| 18, 19, 23, 5 | microSD (VSPI) | Logging |
+| 4 / 16 / 17 | RGB LED (active LOW), **back side** | Kept off (invisible inside the box). Spare pads if ever needed |
+| 34 | LDR (input only) | Backlight level when the screen is on (the LDR faces the front) |
+| 26 | Speaker amplifier | Alarm beeps (optional small speaker) |
+| 0 | BOOT button | Long press at boot = factory reset (planned) |
+| 1 / 3 | UART0 (CH340), P1 | Serial debug / CLI. P1 also carries 5 V in |
+| **22** | Free (P3 and CN1) | **Relay** |
+| **27** | Free (CN1). Check the backlight variant | **1-Wire: DS18B20 local temperature sensor** |
+| **35** | Free (P3), input-only, no pull-up | Spare |
 
-Known board constraints:
+Why 1-Wire for the local sensor: only GPIO 22/27 are free on connectors, the relay takes 22, so
+one pin is left. A DS18B20 needs one pin (I²C would need two). Its ±0.5 °C absolute error doesn't
+matter, because its offset is learned against the room node ([04 §1](04-control-algorithm.md#1-measurement--sensor-fusion)).
 
-- **Touch and SD both default to the VSPI peripheral.** To use both, run touch on a bit-banged
-  or separate bus (e.g. an XPT2046 bit-bang library, or a LovyanGFX config that drives touch
-  separately). This is the first thing to prove in the Phase 1 spike.
-- No free I²C pins unless GPIO 22/27 are used for it. That is why the plan uses 1-Wire on 27 and
-  no RTC (time comes from NTP or the browser).
-- GPIO 35 has no internal pull-up/down. The opto input stage must provide the pull resistor.
+Known board constraint: **touch and SD both default to VSPI.** Prove a working combination in
+the Phase 1 spike (bit-banged touch, or a LovyanGFX config that drives touch separately).
 
-### Relay stage
+### Power budget & self-heating
 
-```
- CYD CN1 / P3                         relay board / carrier
- ┌──────────┐                ┌──────────────────────────────────────┐
- │ 5V (P1)  ├───────────────►│ +5V ──┬── coil ──┐                   │
- │ GPIO22   ├──1kΩ──┬───────►│ base  │          │  NPN (or module   │
- │          │     10kΩ       │  of   │   1N4148 ▲  opto + driver)   │
- │ GND      ├───────┴───────►│ GND ──┴──────────┘                   │
- └──────────┘   (pull-down:  │                                      │
-                valve closed │  COM ──── to valve/thermostat line   │
-                during boot) │  NO  ──── (replaces old thermostat)  │
-                             └──────────────────────────────────────┘
-```
-
-- **Relay:** a real dry-contact relay with proper isolation, e.g. **Finder 34.51 with a 5 V DC
-  coil** (slim, reinforced insulation) on a small carrier with driver and flyback diode. Or a
-  quality opto-isolated module. Avoid the cheapest blue modules if they switch 230 V: the PCB
-  creepage is poor.
-- **Load:** a zone-valve actuator draws only a few VA. Switching every ≥ 3 min is trivial for
-  the contact. Expect ~25–100 operations/day.
-- **Default state:** de-energised = valve closed. The 10 kΩ pull-down keeps it closed while the
-  ESP32 boots or is flashed (GPIO 22 is not a strapping pin).
-- **What the old thermostat switches (Phase 0, measure it):**
-  1. 230 V AC to the valve actuator (most common): the relay contact switches L to the
-     actuator. Mains wiring, fuse, enclosure rules apply.
-  2. 24 V AC: same, low voltage.
-  3. Dry-contact input of a condo controller/meter module: the relay contact just closes the
-     loop.
-  **Never touch the meter/counter or the valve wiring. Only replace the thermostat contact.**
-
-### Changeover (bypass) switch
-
-A 3-position switch (or two-pole changeover) between the relay contact and the old thermostat:
-
-| Position | Valve driven by |
+| Consumer | Approx. |
 |---|---|
-| TermoMade | CYD relay |
-| Old | the original thermostat (left in place) |
-| Off | nothing (summer) |
+| CYD, Wi-Fi AP on, backlight off | 0.4–0.6 W |
+| Backlight on (≤ 30 s at a time) | +0.3–0.5 W |
+| Relay coil (while open, ~20 % of the time) | 0.2–0.4 W |
+| PSU losses (HLK-PM05 class) | 0.1–0.3 W |
 
-It lets you revert in seconds if the electronics fail, and it is how the **baseline** is
-measured ([09](09-logging-evaluation.md)).
+About 1 W in a small box → the inside runs a few °C warm. Hence the **separate, vented sensor
+chamber** at the bottom of the enclosure and the learned offset. The screen being off 99 % of the
+time helps.
 
-### Valve-sense input (optional, recommended)
-
-An AC-opto detector module (for 230 V) or a simple opto + resistor (for 24 V) on **the valve
-side of the changeover switch** → GPIO 35 (with external 10 kΩ pull-up to 3.3 V).
-It measures **billed time no matter who commands the valve**, which gives the baseline data with
-the old thermostat. It also detects a stuck relay. If the valve has an auxiliary end-switch,
-sensing that is even better (true open time).
-
-### Power
-
-5 V USB power supply, ≥ 1 A (CYD ≈ 150–250 mA with backlight + relay coil ≈ 35–80 mA). If the
-base sits in the old thermostat's wall box and only 230 V is there: a certified enclosed 5 V
-module (e.g. Hi-Link HLK-PM05 class) inside a properly separated enclosure, or an electrician.
-
-## Room sensor node: ESP32 DevKit
+## Room node: ESP32 DevKit
 
 | Item | Choice | Why |
 |---|---|---|
-| Board | ESP32 DevKit (WROOM-32), USB-powered | You have it. USB power means no sleep complexity |
-| Sensor | **Sensirion SHT41** (±0.2 °C typ.) or **SHT45** (±0.1 °C typ.) breakout, I²C | Far better than the DHT22 (±0.5 °C, drift, slow single-wire timing) |
-| Wiring | SDA GPIO 21, SCL GPIO 22, 3.3 V, GND | Default I²C pins on the DevKit |
+| Board | ESP32 DevKit (WROOM-32), USB-powered from a socket | You have it. USB power = no sleep complexity |
+| Sensor | **Sensirion SHT41** (±0.2 °C typ.) or **SHT45** (±0.1 °C typ.) breakout | Reference sensor of the system |
+| Clock | **DS3231 RTC module** with CR2032 | System time after power cuts (no internet). ±2 ppm ≈ 1 min/year |
+| Bus | I²C: SDA GPIO 21, SCL GPIO 22, 3.3 V — both modules on the same bus | DS3231 at 0x68, SHT4x at 0x44 |
 | Indicator | On-board LED: short blink on each ACK | Link health at a glance |
-| Optional | 0.96" SSD1306 OLED (I²C, same bus) | Shows temp, setpoint, valve state from the base's ACK |
 
-**Self-heating is the main accuracy risk.** An ESP32 with Wi-Fi radio warms its enclosure by
-1–3 °C. Mount the SHT4x **outside or below** the board compartment, in a vented chamber separated
-by a baffle, ≥ 3–5 cm from the module. Cut CPU to 80 MHz. Validate against a reference
-thermometer for 24 h and set the offset in the base.
+**DS3231 gotcha:** the common "ZS-042" module has a charging circuit (diode + 200 Ω) meant for an
+LIR2032. With a normal CR2032, **remove the diode or resistor**, otherwise it tries to charge a
+non-rechargeable cell.
 
-**Placement:** interior wall, ~1.5 m high, away from radiators, direct sun, doors, lamps, TV and
-kitchen. Same room as the old thermostat's "reference" if it was well placed.
+**Self-heating:** mount the SHT4x outside or below the board compartment, behind a baffle, with
+vents. CPU at 80 MHz. Validate 24 h against a reference thermometer.
+
+**Placement in the big room:** opposite side from the base if possible (two spots average
+better), ~1.5 m high, interior wall, away from radiators, sun, door, kitchen, TV.
 
 ## Future nodes
 
 | Node | Hardware | Notes |
 |---|---|---|
-| Outdoor | ESP32-C3/C6 small board (low quiescent LDO) + SHT41 or DS18B20, 18650 Li-ion | Deep sleep, wake every 5 min. 3D-printed radiation shield (Stevenson screen). North wall. ESP-NOW **Long Range** mode if the link is weak |
-| Bathroom | DevKit or C3 + SHT41 | USB if a socket is near, otherwise battery. Humidity spikes → shower detection |
-| Pipe | DevKit + 2× DS18B20 (1-Wire, 4.7 kΩ pull-up) clamped on supply/return with thermal paste and pipe insulation | Near the apartment's valve/manifold **inside the apartment**, or one probe on the farthest radiator's return. Never open the condo meter box |
+| Bathroom | DevKit or C3 + SHT41 | USB if a socket is near, otherwise battery. RH → shower detection |
+| Outdoor | ESP32-C3/C6 small board (low-Iq LDO) + SHT41/DS18B20, 18650 | Deep sleep, 5 min. 3D-printed radiation shield. ESP-NOW Long Range if the link is weak |
+| Pipe | DevKit + 2× DS18B20 clamp-on supply/return | Only on pipes inside the apartment. Gives fill time, plant-off detection |
 
 ## Bill of materials (MVP)
 
@@ -132,36 +131,34 @@ kitchen. Same room as the old thermostat's "reference" if it was well placed.
 | 1 | ESP32-2432S028R (CYD) |
 | 1 | ESP32 DevKit (WROOM-32) |
 | 1 | SHT41 or SHT45 breakout (I²C) |
-| 1 | Relay 5 V DC coil with driver (Finder 34.51 + carrier, or quality opto module) |
-| 1 | 3-position changeover switch (rated for the switched voltage) |
-| 2 | 5 V USB power supplies (≥ 1 A) + cables |
-| 1 | microSD card (≥ 4 GB, FAT32) |
-| — | 1 kΩ, 10 kΩ resistors, 1N4148, JST 1.25 mm cables for CN1/P3, Dupont wires |
-| opt. | AC-opto detector module (valve sense) |
-| opt. | DS18B20 (TO-92 or waterproof) + 4.7 kΩ (local fallback sensor / pipe) |
-| opt. | Reference thermometer for calibration |
+| 1 | DS3231 RTC module + CR2032 (charging diode removed) |
+| 1 | DS18B20 (TO-92, or a short waterproof probe) + 4.7 kΩ pull-up |
+| 1 | 1-channel 5 V relay module with COM/NO/NC, contacts ≥ 250 V~ 5 A (or Finder 34.51 + carrier) |
+| 1 | Enclosed 230 V → 5 V PSU module, ≥ 1 A, e.g. HLK-PM05/HLK-5M05 class (≈ 34 × 20 × 15 mm) |
+| 1 | Fuse T 500 mA (inline or PCB) + small varistor (as in the PSU datasheet application circuit) |
+| 1 | Terminal block 4–5 poles (L, N, OPEN, CLOSE, spare) or lever connectors |
+| 1 | USB power supply + cable for the room node |
+| 1 | microSD (≥ 4 GB, FAT32) |
+| — | 1 kΩ, 10 kΩ resistors, JST 1.25 mm leads for CN1/P3/P1, M3 heat-set inserts + screws |
+| — | Reference thermometer for calibration |
+| keep | The old thermostat, as emergency spare |
 
-## Enclosures (3D printed)
+## Enclosure
 
-- Parametric **OpenSCAD** models in `hardware/enclosures/`, **no small radii or fillets**
-  (chamfers or large radii only).
-- **Base:** wall-mount frame for the CYD, optionally on an Italian 503 box. Rear cavity for the
-  relay carrier, with mains and low-voltage sides physically separated if mains is present.
-  Vent slots so the screen and ESP32 do not heat the case. Access to microSD and the USB port.
-- **Room node:** two chambers: the ESP32 on top, and the sensor below behind a solid baffle with
-  vertical slots for convection.
-- **Material:** PETG or ASA near radiators. Not PLA, which creeps with warmth.
+Two-part parametric OpenSCAD box screwed onto the 503 box. Full spec in
+[13-enclosure](13-enclosure.md).
 
 ## Phase 0 site survey (checklist)
 
-- [ ] Photograph the old thermostat wiring. Measure the switched voltage (AC/DC, value).
-- [ ] Identify the zone valve and actuator (brand/model): motorised or thermoelectric? Stroke
-      time? Auxiliary end-switch?
-- [ ] Find the meter type (label/model). Pure time, compensated, or heat meter?
-      Can its display be read?
-- [ ] Confirm the fill time: stopwatch from thermostat "on" until the farthest radiator's return
-      pipe gets hot.
-- [ ] Count radiators, material (aluminium / cast iron / steel), TRVs present?
-- [ ] Condo plant schedule (hours/day)? Supply temperature if a gauge exists.
-- [ ] Wi-Fi/internet at the house? Distance and walls between base and room-node spots.
-- [ ] Mains socket near the base and sensor positions?
+- [x] Valve actuator: Coster CDK 068, 230 V 3-point
+- [x] Old thermostat wiring: 3 wires (common, open, close), 230 V
+- [ ] **Is N (neutral) available in the 503 box?** (D13)
+- [ ] Photograph the 503 box: wires, free depth, screw positions. Measure the fixing-screw
+      spacing (standard 83.5 mm) and the opening size
+- [ ] Confirm the fill time: stopwatch from "open" until the farthest radiator's return pipe gets
+      hot (expect ≈ 3 min incl. ~30 s valve travel)
+- [ ] Radiators: count, material, TRVs?
+- [ ] Condo plant schedule (hours/day)?
+- [ ] Socket for the room node, its position in the big room, distance to the base
+- [ ] Measure the CYD (outline, hole positions, connector positions) with calipers
+- [ ] Last season's condominium statement: your hours (baseline)

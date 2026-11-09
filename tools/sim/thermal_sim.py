@@ -67,19 +67,30 @@ class Hysteresis:
 
 
 class PID:
-    """Velocity-safe PI(D): derivative on filtered measurement, conditional
-    integration + clamp of the I term to [0, 1] (I = learned steady-state duty)."""
+    """PI(D) producing a duty demand u in [0, 1].
+    * derivative on the filtered measurement (Td = 0 by default)
+    * I = learned steady-state duty, clamped to [0, 1]
+    * integrates only inside a band |e| <= band (no windup on big errors:
+      cold start, night setback, sun) and not when saturated high
+    * 'coast': after a setpoint DECREASE, I is frozen until the room has
+      cooled down to the new setpoint (e >= 0), so a night setback does not
+      drain the learned load"""
 
-    def __init__(self, kp=0.6, ti_s=120 * 60, td_s=0.0, tf_s=120, i0=0.15):
-        self.kp, self.ti, self.td, self.tf = kp, ti_s, td_s, tf_s
+    def __init__(self, kp=0.6, ti_s=120 * 60, td_s=0.0, tf_s=120, i0=0.15, band=1.0):
+        self.kp, self.ti, self.td, self.tf, self.band = kp, ti_s, td_s, tf_s, band
         self.I = i0
         self.mf = None      # filtered measurement
         self.dm = 0.0       # filtered derivative of measurement (C/s)
+        self.last_sp = None
+        self.coast = False
         self.terms = (0, 0, 0)
 
-    def update(self, sp, meas, dt):
+    def update(self, sp, meas, dt, u_max=1.0):
         if self.mf is None:
             self.mf = meas
+        if self.last_sp is not None and sp < self.last_sp - 0.05:
+            self.coast = True
+        self.last_sp = sp
         a = dt / (self.tf + dt)
         prev = self.mf
         self.mf += a * (meas - self.mf)
@@ -87,13 +98,15 @@ class PID:
         ad = dt / (max(self.td / 4, dt) + dt)
         self.dm += ad * (raw_d - self.dm)
         e = sp - self.mf
+        if e >= 0:
+            self.coast = False
         P = self.kp * e
         D = -self.kp * self.td * self.dm
         u_unsat = P + self.I + D
-        if not (u_unsat >= 1.0 and e > 0):      # anti-windup only at the top;
-            self.I += self.kp * dt / self.ti * e  # below 0 the clamp handles it
+        if abs(e) <= self.band and not self.coast and not (u_unsat >= u_max and e > 0):
+            self.I += self.kp * dt / self.ti * e
         self.I = min(max(self.I, 0.0), 1.0)
-        u = min(max(P + self.I + D, 0.0), 1.0)
+        u = min(max(P + self.I + D, 0.0), u_max)
         self.terms = (P, self.I, D)
         return u
 
@@ -144,16 +157,29 @@ class PulseModulator:
 
 
 class TermoMade:
+    """PID + PulseModulator + valve FSM (min times enforced).
+    efficient_recovery: after a setpoint INCREASE (e.g. Night -> Comfort) the
+    demand is capped at uc (pulse-frequency only, never long/continuous ON)
+    until the room is within 0.3 C of the setpoint. Continuous ON returns hot
+    water to the plant: ~0.13 kWh per billed minute instead of ~0.47."""
     name = "termomade"
 
-    def __init__(self, pid, mod):
-        self.pid, self.mod = pid, mod
+    def __init__(self, pid, mod, efficient_recovery=False):
+        self.pid, self.mod, self.eff = pid, mod, efficient_recovery
         self.on = False
         self.t_state = 1e9
         self.u = 0.0
+        self.last_sp = None
+        self.recovering = False
 
     def tick(self, sp, t_meas, dt):
-        self.u = u = self.pid.update(sp, t_meas, dt)
+        if self.last_sp is not None and sp > self.last_sp + 0.05:
+            self.recovering = True
+        self.last_sp = sp
+        if self.recovering and sp - t_meas <= 0.3:
+            self.recovering = False
+        u_max = self.mod.uc if (self.eff and self.recovering) else 1.0
+        self.u = u = self.pid.update(sp, t_meas, dt, u_max)
         self.t_state += dt
         on_t, off_t = self.mod.targets(u)
         if self.on and self.t_state >= max(self.mod.on_min, on_t):
@@ -161,6 +187,24 @@ class TermoMade:
         elif (not self.on) and self.t_state >= max(self.mod.off_min, off_t):
             self.on, self.t_state = True, 0.0
         return self.on
+
+
+class Schedule:
+    """Wraps a controller and replaces the setpoint with a daily program."""
+
+    def __init__(self, inner, day_start_h=6.5, day_end_h=22.5, sp_day=20.0, sp_night=17.0, preheat_h=0.0):
+        self.inner, self.name = inner, inner.name
+        self.a, self.b, self.d, self.n, self.pre = day_start_h - preheat_h, day_end_h, sp_day, sp_night, preheat_h
+        self.t = 0.0
+
+    @property
+    def u(self):
+        return getattr(self.inner, "u", float("nan"))
+
+    def tick(self, sp, t_meas, dt):
+        h = (self.t / 3600) % 24
+        self.t += dt
+        return self.inner.tick(self.d if self.a <= h < self.b else self.n, t_meas, dt)
 
 
 # --------------------------------------------------------------------------- simulation
@@ -277,7 +321,8 @@ def make(name, **kw):
     pid = PID(kp=kw.get("kp", 0.6), ti_s=kw.get("ti", 120) * 60, td_s=kw.get("td", 0) * 60, i0=kw.get("i0", 0.15))
     if name == "tpi":
         return TPI(pid)
-    return TermoMade(pid, PulseModulator(on_min=kw.get("on_min", 180), off_min=kw.get("off_min", 300)))
+    return TermoMade(pid, PulseModulator(on_min=kw.get("on_min", 180), off_min=kw.get("off_min", 300)),
+                     efficient_recovery=kw.get("eff", False))
 
 
 def cold_start(ctrl, sp=20.0, T0=8.0, T_out_mean=-2.0, hours=24, p=PLANT):
@@ -324,6 +369,29 @@ def main():
         rows.append(r)
         recs[name] = rec
     table(rows, ["ctrl", "t_reach_h", "overshoot", "billed_min_day", "heat_kWh_day", "cycles_day"])
+
+    print("\n=== NIGHT SETBACK (Comfort 20 C 06:30-22:30), T_out -2 C, days 3-5 ===")
+    print("    day-time comfort is the same in all rows; T@06:30 / T@07:30 = room temperature at wake-up")
+    rows = []
+    for label, ctrl, night, pre in [
+            ("hyst, no setback", "hyst", 20.0, 0.0),
+            ("hyst, night 17", "hyst", 17.0, 0.0),
+            ("pulse, no setback", "termomade", 20.0, 0.0),
+            ("pulse, night 17, fast", "termomade", 17.0, 0.0),
+            ("pulse, night 17, efficient", "termomade_eff", 17.0, 0.0),
+            ("pulse, night 17, eff, +2h", "termomade_eff", 17.0, 2.0),
+            ("pulse, night 18.5, fast", "termomade", 18.5, 0.0),
+            ("pulse, night 18.5, eff, +1h", "termomade_eff", 18.5, 1.0)]:
+        inner = make("termomade", eff=True) if ctrl == "termomade_eff" else make(ctrl)
+        r, rec = simulate(Schedule(inner, sp_night=night, preheat_h=pre), days=5, eval_from_h=48, record=True)
+
+        def t_at(h):
+            return min(rec, key=lambda x: abs(x[0] - h))[1]
+        r["ctrl"] = label
+        r["T@06:30"] = sum(t_at(d * 24 + 6.5) for d in (2, 3, 4)) / 3
+        r["T@07:30"] = sum(t_at(d * 24 + 7.5) for d in (2, 3, 4)) / 3
+        rows.append(r)
+    table(rows, ["ctrl", "billed_min_day", "heat_kWh_day", "kWh_per_billed_min", "T@06:30", "T@07:30", "tmax"])
 
     if a.plot:
         import os

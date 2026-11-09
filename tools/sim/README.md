@@ -3,7 +3,7 @@
 Design tool to check the pulse-control idea and choose default tuning. **Not firmware.**
 
 ```bash
-python3 thermal_sim.py               # tables: winter / cold / mild / cold-arrival
+python3 thermal_sim.py               # tables: winter / cold / mild / cold-arrival / night setback
 python3 thermal_sim.py --plot out/   # + sim_steady.png, sim_cold_start.png, modulator.png
 ```
 
@@ -27,8 +27,10 @@ the real logs (Phase 4: `fit.py`).
 
 - `Hysteresis` — classic thermostat (±0.2 °C)
 - `TPI` — PI + fixed 20 min period, with min ON/OFF
-- `TermoMade` = `PID` + `PulseModulator`: **reference implementation** of
-  `docs/04-control-algorithm.md`. Firmware unit tests should reproduce its targets.
+- `TermoMade` = `PID` + `PulseModulator` (+ optional efficient recovery): **reference
+  implementation** of `docs/04-control-algorithm.md`. Firmware unit tests should reproduce its
+  targets. `PID` integrates only within ±1 °C (`band`) and coasts after setpoint decreases
+- `Schedule` wraps any controller with a day/night program (night setback studies)
 
 ## Metrics
 

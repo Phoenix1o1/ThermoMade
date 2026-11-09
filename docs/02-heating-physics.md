@@ -15,9 +15,18 @@ you save:
 | **Compensated insertion time** (UNI/TR 11388 "tempi di inserzione") | Open time × (mean of flow & return − room temp), scaled by emitter power | **Large saving**: about 40 % fewer units in simulation, because each pulse starts by returning cold water |
 | **Direct heat meter** (flow × ΔT, "contacalorie") | Real energy | **No billing advantage**. Comfort still improves, and less overshoot means slightly less energy |
 
-The request says "billed by time of flowing", which is the first or second family. Both favour
-pulsing. Check the meter's label or the condominium's apportionment report (*ripartizione*) to
-confirm which one you have.
+**This house:** the condominium's yearly fuel cost is split by **valve-open time × apartment
+size**:
+
+```
+your share = yearly fuel cost × (your hours × your m²) / Σ (hours × m²) of all units
+```
+
+That is the **pure time** family, so the saving is real: your share falls in proportion to
+your billed hours. The hours are most likely counted from the CDK 068's auxiliary microswitch
+(it switches at mid-stroke). Opening and closing delays then roughly cancel, and billed time ≈
+the time the relay commands "open". Last season's statement with your hours is the baseline
+([09](09-logging-evaluation.md)).
 
 ## 2. Hot water in the radiators is stored energy you've already paid for
 
@@ -84,8 +93,9 @@ Results (days 2–4 of each run, setpoint 20 °C; raw output in `img/sim_results
 | | **termomade** | **77 (−27 %)** | **0.57** | **0.79 (−39 %)** | **0.31 °C** | 20.70 | 26 |
 
 Cold arrival (house at 8 °C, setpoint 20 °C): all controllers take ≈ 14 h because the walls have to
-warm up. Overshoot after arrival is 0.73 °C (hyst) vs **0.43 °C** (termomade). Pre-heating before
-arrival is therefore a valuable feature *if* the house has internet (F18).
+warm up. Overshoot after arrival is 0.73 °C (hyst) vs **0.28 °C** (termomade). Without internet,
+remote pre-heating isn't possible. A planned "we arrive Friday 18:00" entry before leaving is
+(optimum start, [04](04-control-algorithm.md#9-planned-extensions)).
 
 ![steady](img/sim_steady.png)
 
@@ -105,5 +115,10 @@ arrival is therefore a valuable feature *if* the house has internet (F18).
   max cycles/hour limit.
 - **The absolute numbers are guesses.** Calibrate the model with logged data (fill time, cooling
   curve) in Phase 4.
+- **Night setback is tricky under time billing.** Recovering in the morning with the valve wide
+  open costs billed minutes at the worst rate (0.13 instead of 0.47 kWh/min), while a heavy
+  building saves little heat overnight. A 17 °C night cost +42 % billed time in simulation, a
+  18.5 °C night with pulse-only ("efficient") recovery and 1 h early start only +7 %. Details
+  and the chosen default in [04 §5](04-control-algorithm.md#5-recovery-cold-start-morning-boost).
 - **Derivative action did not help** in simulation (pulse ripple + sensor lag). Default Td = 0.
   The term exists in firmware but stays off.

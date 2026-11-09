@@ -6,8 +6,8 @@
 
 ```
 # TermoMade fw=0.3.0+abc1234 params: ON_MIN=180 OFF_MIN=300 KP=0.60 TI=7200 TD=0 ...
-time,uptime_s,t_ctrl,t_raw_room,rh_room,t_bath,t_out,t_supply,t_return,sp,mode,u,p,i,valve,fsm,on_tgt_s,off_tgt_s,billed_s_today,node_age_s,rssi
-2026-11-09T10:42:00+01:00,3600,20.31,20.28,41.2,,,,,20.00,AUTO,0.18,-0.19,0.37,1,OPEN,180,820,3780,12,-61
+time,time_src,uptime_s,t_ctrl,t_room,t_base_raw,base_offset,rh_room,t_bath,t_out,sp,mode,ctrl,u,p,i,valve,fsm,on_tgt_s,off_tgt_s,billed_s_today,node_age_s,rssi
+2026-11-09T10:42:00+01:00,phone,3600,20.31,20.28,21.42,1.08,41.2,,,20.00,AUTO,PULSE,0.18,-0.19,0.37,1,OPEN,180,820,3780,12,-61
 ```
 
 - Empty fields for sensors that don't exist (yet).
@@ -20,7 +20,7 @@ mode changes, setpoint changes, node lost/found, alarms, boots (with reset reaso
 
 ### Daily summary (`/log/summary.csv`, one row per day)
 
-`date, billed_min, pulses, cycles, mean_t, rms_err, max_over, min_under, t_out_mean, hdd, billed_per_hdd, controller (termomade|baseline), notes`
+`date, billed_min, pulses, cycles, mean_t, rms_err, max_over, min_under, t_out_mean, hdd, billed_per_hdd, controller (PULSE|CLASSIC), night_sp, notes`
 
 ## KPIs
 
@@ -34,28 +34,29 @@ mode changes, setpoint changes, node lost/found, alarms, boots (with reset reaso
 | Valve cycles/day | count of OPEN transitions | Wear |
 | Heat per pulse (pipe node) | ≈ C_circuit × (T_supply − T_return,start) | Pulse efficiency, model calibration |
 
-Without an outdoor node: take the outdoor temperature from a weather service when online (e.g.
-the Open-Meteo API), or log the condo's degree-day data. Even then, compare only days with similar
-weather.
+Without an outdoor node, outdoor temperatures for HDD come later, at home: download the
+season's daily means for the town from a weather archive (e.g. Open-Meteo historical API or the
+regional ARPA station) and join them to the daily summary. The house itself stays offline.
 
-## Baseline vs TermoMade (A/B protocol)
+## Baseline vs TermoMade
 
-The changeover switch and the valve-sense input make a fair comparison possible:
+The old thermostat is removed when the box goes on the 503, so comparisons work like this:
 
-1. **Shadow mode (≥ 1 week):** switch on **Old**. TermoMade runs, logs room T and **senses the
-   valve**. Its controller computes what it *would* do (logged as `fsm_shadow`) without
-   driving the relay. This is the **baseline**: billed minutes per HDD with the old thermostat.
-2. **Alternate days (2–4 weeks):** switch on TermoMade and Old on alternate days (or 2-day
-   blocks, because thermal mass carries over). Alternating spreads weather effects evenly
-   between both.
-3. **Compare** billed_min/HDD and comfort KPIs per controller. Also read the condominium meter
-   display (if any) weekly and photograph it, so the logs can be cross-checked against what is
-   actually billed.
-4. Keep the old thermostat at the **same setpoint** as TermoMade during the test.
+1. **Last season (free baseline):** the condominium statement lists your valve hours for the
+   season. Divide by the season's HDD (archive data) → **hours per HDD, old thermostat**.
+   Note whether a night setback was in use: deep setbacks cost hours too
+   ([04 §5](04-control-algorithm.md#5-recovery-cold-start-morning-boost)).
+2. **CLASSIC days (same hardware, same season):** TermoMade has a built-in `CLASSIC` controller
+   (±0.2 °C on/off, exactly the simulator's `hyst`). Run it on **alternate days** (or 2-day
+   blocks, because of the thermal mass) for 2–4 weeks, with the same setpoints and schedule. Alternating
+   spreads the weather between both controllers.
+3. **Compare** billed min/HDD (and comfort KPIs) PULSE vs CLASSIC, and the season total vs last
+   season.
+4. Read the condominium hour counter (if it has a display) weekly and photograph it, so the logs
+   can be cross-checked against what is billed.
 
-Expected from simulation: about −30 % billed minutes (pure time) and −40 % compensated units,
-with RMS error down from ~0.5 °C to ~0.15 °C. Reality will differ. This protocol tells you by how
-much.
+Expected from simulation: about −30 % billed minutes with RMS error from ~0.5 °C down to
+~0.15 °C. Reality will differ. This tells you by how much.
 
 ## Using the logs to improve the model
 
