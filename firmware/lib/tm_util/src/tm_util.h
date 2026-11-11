@@ -11,6 +11,8 @@ uint8_t crc8Sensirion(const uint8_t* data, size_t len);
 // Decode the 6-byte answer of a measure command (T msb, lsb, crc, RH msb, lsb, crc).
 // Returns false on CRC error. RH is clamped to 0..100 % (datasheet recommendation).
 bool sht4xDecode(const uint8_t raw[6], double* t_c, double* rh_pct);
+// SHT3x (SHT30/31/35): same frame and CRC, different humidity formula (RH = 100 * ticks / 65535).
+bool sht3xDecode(const uint8_t raw[6], double* t_c, double* rh_pct);
 
 // ---- civil time (proleptic Gregorian, UTC) ----
 int64_t daysFromCivil(int y, unsigned m, unsigned d);

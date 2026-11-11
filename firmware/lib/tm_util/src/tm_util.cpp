@@ -24,6 +24,15 @@ bool sht4xDecode(const uint8_t raw[6], double* t_c, double* rh_pct) {
     return true;
 }
 
+bool sht3xDecode(const uint8_t raw[6], double* t_c, double* rh_pct) {
+    if (crc8Sensirion(raw, 2) != raw[2] || crc8Sensirion(raw + 3, 2) != raw[5]) return false;
+    const uint16_t t_ticks = static_cast<uint16_t>((raw[0] << 8) | raw[1]);
+    const uint16_t rh_ticks = static_cast<uint16_t>((raw[3] << 8) | raw[4]);
+    if (t_c) *t_c = -45.0 + 175.0 * t_ticks / 65535.0;
+    if (rh_pct) *rh_pct = 100.0 * rh_ticks / 65535.0;
+    return true;
+}
+
 // Howard Hinnant's algorithms (public domain)
 int64_t daysFromCivil(int y, unsigned m, unsigned d) {
     y -= m <= 2;

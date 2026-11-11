@@ -171,6 +171,7 @@ dew point and the "air too dry / too humid" advice on the screen (winter: < 35 %
 | Sensor | Accuracy (T / RH) | Interface | Verdict |
 |---|---|---|---|
 | **SHT41 / SHT45** | ±0.2 / ±0.1 °C, ±1.8 / ±1.0 %RH | I²C with CRC, shares the DS3231 bus | **Recommended** (a few €). Build `node_sht4x` |
+| **SHT31-D** (SHT30/35 too) | ±0.2 °C, ±2 %RH | I²C with CRC (0x44, ADR low), same wiring as SHT4x | **Good and cheap.** Build `node_sht31`. Older, larger chip than the SHT4x, same quality for this use |
 | DHT22 / AM2302 | ±0.5 °C, ±2–5 %RH | One proprietary timing-critical wire, max one reading per 2 s | Works. Build `node_dht22`, data on **GPIO 4** with 10 kΩ pull-up to 3.3 V (most modules have it). RH known to drift after long periods at high humidity |
 | DHT11 | ±2 °C, **1 °C steps**, ±5 %RH | as DHT22 | **Not supported.** 1 °C steps make the PI see a staircase; useless for a 0.2 °C controller |
 | DS18B20 | ±0.5 °C, no RH | 1-Wire | Good for temperature only; you would lose the humidity advice |

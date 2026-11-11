@@ -25,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        env: [base_cyd, node_sht4x, node_dht22]
+        env: [base_cyd, node_sht4x, node_sht31, node_dht22]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

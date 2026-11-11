@@ -67,8 +67,22 @@ static void test_ds3231_roundtrip() {
     TEST_ASSERT_FALSE(plausibleUnix(0));
 }
 
+// SHT3x datasheet CRC example: 0xBEEF -> 0x92. T ticks 0x6666 -> 25.0 C, RH ticks 0x8000 -> 50 %.
+static void test_sht3x_decode() {
+    uint8_t raw[6] = {0x66, 0x66, 0, 0x80, 0x00, 0};
+    raw[2] = tmu::crc8Sensirion(raw, 2);
+    raw[5] = tmu::crc8Sensirion(raw + 3, 2);
+    double t = 0, rh = 0;
+    TEST_ASSERT_TRUE(tmu::sht3xDecode(raw, &t, &rh));
+    TEST_ASSERT_DOUBLE_WITHIN(0.01, 25.0, t);
+    TEST_ASSERT_DOUBLE_WITHIN(0.01, 50.0, rh);
+    raw[5] ^= 1;
+    TEST_ASSERT_FALSE(tmu::sht3xDecode(raw, &t, &rh));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
+    RUN_TEST(test_sht3x_decode);
     RUN_TEST(test_crc8_datasheet_vector);
     RUN_TEST(test_sht4x_decode);
     RUN_TEST(test_civil_time);

@@ -20,6 +20,9 @@
 | D26 | OFF button | **On Home** (top bar), two taps to confirm (2026-11-11) |
 | D27 | Next feature | **Web page + JSON API** first; planned return (D23) low priority: the return date is rarely known |
 | D28 | Web access protection | Wi-Fi password only for now (no PIN); revisit with the Android app |
+| D13 | Neutral in the 503 box | **Andrea will bring neutral to the box** (2026-11-12) |
+| D18 | Relay module input | **Selectable H/L module: set the jumper to H** (active-HIGH), `TM_RELAY_ACTIVE_HIGH=1` as committed, 10 kΩ pull-down on IN |
+| D29 | Room sensor part | SHT31-D is fine (build `node_sht31`); DS3231 confirmed |
 | D24 | Light sensing | **CYD's own LDR** (GPIO 34), sampled with the screen dark, self-learning scale → auto-brightness + log. No extra sensor (a BH1750 on the room node only if calibrated lux is ever needed) |
 | — | Extra requirements | Night setback schedule, Android app for the parents, screen off after 30 s, 2-part OpenSCAD box on the 503 box with PSU inside |
 

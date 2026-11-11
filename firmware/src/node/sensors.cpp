@@ -9,9 +9,22 @@ static DHT g_dht(cfg::kPinDht, DHT22);
 
 namespace {
 constexpr uint8_t kShtAddr = 0x44;
+#if defined(TM_NODE_SENSOR_SHT31)
+// SHT30 / SHT31 / SHT35: 16-bit commands
+constexpr uint16_t kShtMeasureHigh = 0x2400;   // single shot, high repeatability, no clock stretching (max 15.5 ms)
+constexpr uint16_t kShtSoftReset = 0x30A2;
+constexpr uint16_t kShtIdent = 0xF32D;         // status register (2 bytes + CRC): used to detect the chip
+constexpr int kShtIdentLen = 3;
+constexpr int kShtMeasureMs = 16;
+#define TM_SHT_NAME "SHT31"
+#else
 constexpr uint8_t kShtMeasureHigh = 0xFD;   // high repeatability, max 8.3 ms
 constexpr uint8_t kShtSoftReset = 0x94;
-constexpr uint8_t kShtSerial = 0x89;
+constexpr uint8_t kShtIdent = 0x89;         // serial number (2 x (2 bytes + CRC))
+constexpr int kShtIdentLen = 6;
+constexpr int kShtMeasureMs = 10;
+#define TM_SHT_NAME "SHT4x"
+#endif
 constexpr uint8_t kRtcAddr = 0x68;
 
 bool plausibleClimate(double t, double rh) {
@@ -19,15 +32,26 @@ bool plausibleClimate(double t, double rh) {
 }
 
 #if defined(TM_NODE_SENSOR_SHT4X)
-bool shtCommand(uint8_t cmd) {
+bool shtCommand(uint16_t cmd) {
     Wire.beginTransmission(kShtAddr);
-    Wire.write(cmd);
+#if defined(TM_NODE_SENSOR_SHT31)
+    Wire.write(static_cast<uint8_t>(cmd >> 8));
+#endif
+    Wire.write(static_cast<uint8_t>(cmd & 0xFF));
     return Wire.endTransmission() == 0;
 }
-bool shtRead6(uint8_t* buf) {
-    if (Wire.requestFrom(kShtAddr, static_cast<uint8_t>(6)) != 6) return false;
-    for (int i = 0; i < 6; ++i) buf[i] = static_cast<uint8_t>(Wire.read());
+bool shtReadN(uint8_t* buf, int n) {
+    if (Wire.requestFrom(kShtAddr, static_cast<uint8_t>(n)) != n) return false;
+    for (int i = 0; i < n; ++i) buf[i] = static_cast<uint8_t>(Wire.read());
     return true;
+}
+bool shtRead6(uint8_t* buf) { return shtReadN(buf, 6); }
+bool shtDecode(const uint8_t* raw, double* t, double* rh) {
+#if defined(TM_NODE_SENSOR_SHT31)
+    return tmu::sht3xDecode(raw, t, rh);
+#else
+    return tmu::sht4xDecode(raw, t, rh);
+#endif
 }
 #endif
 }  // namespace
@@ -57,7 +81,7 @@ void i2cBusRecover(int sda, int scl) {
 // ------------------------------------------------------------------ climate sensor
 const char* ClimateSensor::name() const {
 #if defined(TM_NODE_SENSOR_SHT4X)
-    return "SHT4x";
+    return TM_SHT_NAME;
 #else
     return "DHT22";
 #endif
@@ -67,14 +91,11 @@ bool ClimateSensor::begin() {
 #if defined(TM_NODE_SENSOR_SHT4X)
     shtCommand(kShtSoftReset);
     delay(2);
-    uint8_t sn[6];
-    present_ = shtCommand(kShtSerial) && (delay(2), shtRead6(sn)) &&
-               tmu::crc8Sensirion(sn, 2) == sn[2] && tmu::crc8Sensirion(sn + 3, 2) == sn[5];
-    if (present_) {
-        Serial.printf("[sensor] SHT4x serial %02X%02X%02X%02X\n", sn[0], sn[1], sn[3], sn[4]);
-    } else {
-        Serial.println("[sensor] SHT4x NOT found at 0x44 (check wiring / pull-ups)");
-    }
+    uint8_t sn[6] = {};
+    present_ = shtCommand(kShtIdent) && (delay(2), shtReadN(sn, kShtIdentLen)) && tmu::crc8Sensirion(sn, 2) == sn[2] &&
+               (kShtIdentLen < 6 || tmu::crc8Sensirion(sn + 3, 2) == sn[5]);
+    if (present_) Serial.printf("[sensor] " TM_SHT_NAME " found at 0x44 (id %02X%02X)\n", sn[0], sn[1]);
+    else Serial.println("[sensor] " TM_SHT_NAME " NOT found at 0x44 (check wiring / pull-ups; ADR pin must be low)");
 #else
     g_dht.begin();
     present_ = true;   // a DHT22 cannot be detected without reading it
@@ -90,8 +111,8 @@ ClimateReading ClimateSensor::read() {
         uint8_t raw[6];
         double t, rh;
         if (shtCommand(kShtMeasureHigh)) {
-            delay(10);
-            if (shtRead6(raw) && tmu::sht4xDecode(raw, &t, &rh) && plausibleClimate(t, rh)) {
+            delay(kShtMeasureMs);
+            if (shtRead6(raw) && shtDecode(raw, &t, &rh) && plausibleClimate(t, rh)) {
                 r.ok = true;
                 r.t_c = t;
                 r.rh = rh;

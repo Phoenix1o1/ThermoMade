@@ -13,7 +13,7 @@ step() {  # step "name" command...
 cd "$repo/firmware"
 step "unit tests (native)" pio test -e native
 if [ $quick = 0 ]; then
-  for e in base_cyd node_sht4x node_dht22; do step "build $e" pio run -e "$e"; done
+  for e in base_cyd node_sht4x node_sht31 node_dht22; do step "build $e" pio run -e "$e"; done
   step "no warnings in our code (base)" bash -c "! (touch src/base/main.cpp; pio run -e base_cyd 2>&1 | grep -E '(src|lib/tm_)[^ ]*: warning')"
 fi
 cd "$repo"
