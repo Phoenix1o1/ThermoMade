@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  # PC unit tests of the control / protocol / util libraries (no hardware, no ESP32 toolchain)
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PlatformIO
+        run: pip install platformio
+      - name: Unit tests
+        working-directory: firmware
+        run: pio test -e native
+
+  # Build all three firmware images and keep the binaries
+  firmware:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [base_cyd, node_sht4x, node_dht22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Cache PlatformIO (platform, toolchain, libraries, build)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            firmware/.pio
+          key: pio-${{ matrix.env }}-${{ hashFiles('firmware/platformio.ini') }}
+      - name: Install PlatformIO
+        run: pip install platformio
+      - name: Build (no secrets.h needed, the base falls back to a default)
+        working-directory: firmware
+        run: pio run -e ${{ matrix.env }}
+      - name: Upload firmware.bin
+        if: matrix.env != 'base_cyd'
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.env }}
+          path: firmware/.pio/build/${{ matrix.env }}/firmware.bin
+          if-no-files-found: error
+      - name: Upload firmware.bin + bootloader.bin + partitions.bin (base)
+        if: matrix.env == 'base_cyd'
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.env }}
+          path: |
+            firmware/.pio/build/${{ matrix.env }}/firmware.bin
+            firmware/.pio/build/${{ matrix.env }}/bootloader.bin
+            firmware/.pio/build/${{ matrix.env }}/partitions.bin
+          if-no-files-found: error
+
+  # A simulator / control-spec change must come with regenerated golden vectors
+  golden-and-sim:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # gen_golden.py and thermal_sim.py use only the standard library (matplotlib is plots-only)
+      - name: Regenerate golden vectors from the simulator
+        run: python3 tools/sim/gen_golden.py firmware/test/test_golden/golden_data.h
+      - name: Committed vectors must match
+        run: git diff --exit-code firmware/test/test_golden/golden_data.h
+
+  # Render the base station screens from the real UI code (render only, no diff against docs/img/ui)
+  ui-preview:
+    runs-on: ubuntu-latest
+    needs: firmware
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Cache PlatformIO (same key as the base_cyd firmware build)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            firmware/.pio
+          key: pio-base_cyd-${{ hashFiles('firmware/platformio.ini') }}
+      - name: Install PlatformIO and Pillow
+        run: pip install platformio pillow
+      - name: Build base_cyd (fetches LovyanGFX into firmware/.pio/libdeps/base_cyd)
+        working-directory: firmware
+        run: pio run -e base_cyd
+      - name: Render screens
+        run: tools/ui_preview/build.sh "$RUNNER_TEMP/ui"
+      - name: Upload PNGs
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-preview
+          path: ${{ runner.temp }}/ui/*.png
+          if-no-files-found: error

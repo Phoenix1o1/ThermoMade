@@ -94,7 +94,7 @@ constexpr uint16_t kBtn = 0x2945;       // dark blue-grey
 constexpr uint16_t kBtnOn = 0x04B3;     // teal
 constexpr uint16_t kAlarm = 0xC000;     // dark red
 
-enum BtnId : uint8_t { kNone = 0, kMinus, kPlus, kAuto, kComfort, kNight, kAway, kClock };
+enum BtnId : uint8_t { kNone = 0, kMinus, kPlus, kAuto, kComfort, kNight, kAway, kClock, kOff };
 constexpr uint32_t kMenuTimeoutS = 120;   // hidden pages: more time to read and edit
 
 struct Btn {
@@ -107,7 +107,8 @@ const Btn kHomeBtns[] = {
     {180, 78, 62, 52, kMinus, "-"}, {252, 78, 62, 52, kPlus, "+"},
     {2, 188, 77, 50, kAuto, "AUTO"}, {82, 188, 77, 50, kComfort, "GIORNO"},
     {162, 188, 77, 50, kNight, "NOTTE"}, {242, 188, 76, 50, kAway, "VIA"},
-    {230, 0, 90, 26, kClock, ""},
+    {232, 0, 88, 26, kClock, ""},
+    {176, 1, 52, 24, kOff, "OFF"},   // SPENTO: second tap within 3 s confirms
 };
 
 Settings g_set;
@@ -128,6 +129,8 @@ bool g_dirty_all = true;
 // optimistic setpoint shown right after a +/- press
 double g_pending_sp = 0;
 uint32_t g_pending_until = 0;
+uint32_t g_off_arm_until = 0;      // OFF button armed (waiting for the confirming tap)
+int c_off = -1;
 // caches for change detection
 char c_mode[32], c_clock[8], c_temp[12], c_rh[16], c_sp[12], c_status[48], c_info[48];
 uint16_t k_mode, k_clock, k_temp, k_rh, k_sp, k_status, k_info;   // colour last drawn per field
@@ -248,12 +251,12 @@ void drawHome(const Snapshot& s) {
     char buf[48];
     // top bar: mode + clock
     if (s.st.boost) snprintf(buf, sizeof buf, "BOOST %lu'", static_cast<unsigned long>((s.st.boost_left_s + 59) / 60));
-    else if (s.st.arrival) snprintf(buf, sizeof buf, "AUTO - ARRIVO %lu'", static_cast<unsigned long>((s.st.arrival_left_s + 59) / 60));
+    else if (s.st.arrival) snprintf(buf, sizeof buf, "ARRIVO %lu'", static_cast<unsigned long>((s.st.arrival_left_s + 59) / 60));
     else if (s.mode == tmc::Mode::Auto)
         snprintf(buf, sizeof buf, "AUTO - %s%s", s.st.period == tmc::Period::Comfort ? "Giorno" : "Notte",
                  s.st.preheating ? " (pre)" : (s.st.override_active ? " *" : ""));
     else snprintf(buf, sizeof buf, "%s", modeName(s.mode));
-    field(c_mode, sizeof c_mode, &k_mode, buf, 6, 5, 220, 20, &fonts::FreeSansBold9pt7b, kFg, kBg);
+    field(c_mode, sizeof c_mode, &k_mode, buf, 6, 5, 168, 20, &fonts::FreeSansBold9pt7b, kFg, kBg);
     if (s.time_valid) snprintf(buf, sizeof buf, "%02u:%02u", s.hour, s.minute);
     else snprintf(buf, sizeof buf, "--:--");
     field(c_clock, sizeof c_clock, &k_clock, buf, 262, 5, 56, 20, &fonts::FreeSansBold9pt7b, s.time_valid ? kFg : kAlarm,
@@ -289,12 +292,20 @@ void drawHome(const Snapshot& s) {
     if (s.mode == tmc::Mode::Off) active = -2;
     if (g_dirty_all || active != c_active) {
         for (const Btn& b : kHomeBtns) {
-            if (b.id == kClock) continue;
+            if (b.id == kClock || b.id == kOff) continue;
             const int idx = static_cast<int>(&b - kHomeBtns);
             if (b.id == kAway && arrivalButton(s.mode)) drawButton(b, false, "ARRIVO", kAccent);
             else drawButton(b, idx == active);
         }
         c_active = active;
+    }
+    // OFF button in the top bar: grey, red "OK?" while armed, red "OFF" while the heating is off
+    const bool armed = static_cast<int32_t>(g_off_arm_until - millis()) > 0;
+    const int off_state = s.mode == tmc::Mode::Off ? 2 : (armed ? 1 : 0);
+    if (g_dirty_all || off_state != c_off) {
+        for (const Btn& b : kHomeBtns)
+            if (b.id == kOff) drawButton(b, false, off_state == 1 ? "OK?" : "OFF", off_state ? kAlarm : kBtn);
+        c_off = off_state;
     }
 }
 
@@ -340,6 +351,15 @@ void onPress(BtnId id, const Snapshot& s, bool repeat) {
         case kAuto: if (!repeat) post(ReqType::SetMode, static_cast<int32_t>(tmc::Mode::Auto)); break;
         case kComfort: if (!repeat) post(ReqType::SetMode, static_cast<int32_t>(tmc::Mode::Comfort)); break;
         case kNight: if (!repeat) post(ReqType::SetMode, static_cast<int32_t>(tmc::Mode::Night)); break;
+        case kOff:
+            if (repeat || s.mode == tmc::Mode::Off) break;
+            if (static_cast<int32_t>(g_off_arm_until - millis()) > 0) {   // second tap: switch off
+                g_off_arm_until = 0;
+                post(ReqType::SetMode, static_cast<int32_t>(tmc::Mode::Off));
+            } else {
+                g_off_arm_until = millis() + 3000;
+            }
+            break;
         case kAway:
             if (repeat) break;
             if (arrivalButton(s.mode)) post(ReqType::Arrive);   // ARRIVO: back to AUTO + forced start

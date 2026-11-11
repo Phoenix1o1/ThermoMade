@@ -133,6 +133,11 @@ int main(int argc, char** argv) {
     g_snap.st.recovering = true;
     shot("home_arrivo");
 
+    // OFF button: first tap arms it
+    tap(200, 12);
+    shot("home_off_confirm");
+    run(3500);
+
     // hidden settings: long-press the clock
     tap(290, 12, 2300);
     static const char* kNames[] = {"menu_1_stato", "menu_2_ora", "menu_3_temperature", "menu_4_orario",

@@ -46,8 +46,9 @@ depend on the TM_LCD flags, see `firmware/README.md`).
   `Sensore stanza non risponde`, `Sensori in disaccordo`, `Ora non impostata`,
   `Valvola aperta da molto tempo`, `Superato il budget giornaliero`. Otherwise the humidity advice
   `Aria secca: umidificare` (< 35 %) / `Aria umida: arieggiare` (> 60 %).
-- Mode buttons AUTO / GIORNO / NOTTE / VIA. OFF (SPENTO) is only on the hidden page SISTEMA, so it
-  can't be pressed by accident.
+- Mode buttons AUTO / GIORNO / NOTTE / VIA. **OFF** is a small button in the top bar: the first
+  tap turns it red (`OK?`), a second tap within 3 s switches the heating off (antifreeze stays
+  active). It stays red while off; any mode button or ARRIVO switches the heating back on.
 - No accented letters on screen (the built-in fonts are 7-bit).
 
 ### ARRIVO (arriving at the cold house)

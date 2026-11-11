@@ -17,6 +17,8 @@
 | D19 | Room sensor | **Both, selectable at build time:** SHT4x (`node_sht4x`, recommended) or DHT22 (`node_dht22`). DHT11 not supported (1 °C steps) |
 | D20 | CYD local sensor | **DS18B20** on GPIO 27 (1-Wire) |
 | D22 | Arrival at the cold house | **ARRIVO button: AUTO + valve forced open 60 min (stops within 2 °C of the setpoint), then efficient pulse recovery.** Chosen from `tools/sim/arrival_study.py` ([04 §5.1](04-control-algorithm.md#51-arrivo-arriving-at-the-cold-house-decided-2026-11-09-with-toolssimarrival_studypy)). Continuous heating until warm would cost ~8.5 billed hours more per arrival |
+| D26 | OFF button | **On Home** (top bar), two taps to confirm (2026-11-11) |
+| D27 | Next feature | **Web page + JSON API** first; planned return (D23) low priority: the return date is rarely known |
 | D24 | Light sensing | **CYD's own LDR** (GPIO 34), sampled with the screen dark, self-learning scale → auto-brightness + log. No extra sensor (a BH1750 on the room node only if calibrated lux is ever needed) |
 | — | Extra requirements | Night setback schedule, Android app for the parents, screen off after 30 s, 2-part OpenSCAD box on the 503 box with PSU inside |
 

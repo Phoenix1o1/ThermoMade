@@ -99,3 +99,17 @@ a power cut.
 | D13 neutral in the 503 box | — | Needed for the PSU |
 | D21 panel colours / touch | ST7789, BGR, no inversion; touch 300–3800, swap | Colour test, `cal` |
 | GPIO 27 | DS18B20 | Not the backlight on this board (backlight = 21 on the 2-USB CYD) |
+
+## CI
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on every push and pull request:
+
+- **tests**: `pio test -e native`.
+- **firmware**: builds `base_cyd`, `node_sht4x`, `node_dht22` (no `secrets.h` needed).
+- **golden-and-sim**: regenerates `test/test_golden/golden_data.h` from the simulator and fails
+  if it differs from the committed file (simulator changed, vectors not regenerated).
+- **ui-preview**: renders the base screens with `tools/ui_preview/build.sh` (render only).
+
+Built binaries: GitHub → Actions → the run → **Artifacts**: `firmware-base_cyd` (`firmware.bin`,
+`bootloader.bin`, `partitions.bin`), `firmware-node_sht4x`, `firmware-node_dht22`; screens in
+`ui-preview`.

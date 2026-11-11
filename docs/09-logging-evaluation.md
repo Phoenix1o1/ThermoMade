@@ -78,3 +78,8 @@ Expected from simulation: about −30 % billed minutes with RMS error from ~0.5 
 `tools/sim` gets a `fit.py` (Phase 4) that reads the CSVs and fits the plant parameters (circuit
 heat capacity, radiator power, building time constants) by matching the logged room temperature to
 the logged valve state. Then re-tune KP/TI in simulation before changing the house.
+
+## Analysis tool
+
+`tools/analysis/tm_logs.py` (summary, plot, fit, compare) reads these files on a PC; see
+`tools/analysis/README.md`. Tested on simulated logs only so far.
