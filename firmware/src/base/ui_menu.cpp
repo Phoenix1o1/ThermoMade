@@ -8,6 +8,7 @@
 #include "logger.h"
 #include "param_table.h"
 #include "radio_base.h"
+#include "tm_deadline.h"
 
 namespace {
 
@@ -54,28 +55,28 @@ bool g_shown_valid[kRows] = {};
 // pending parameter edit (shown until the snapshot catches up)
 int g_pend_idx = -1;
 double g_pend_val = 0.0;
-uint32_t g_pend_until = 0;
+tmu::Deadline g_pend_until;
 
 // two-tap confirmation
 int g_confirm_key = -1;
-uint32_t g_confirm_until = 0;
+tmu::Deadline g_confirm_until;
 
 // short feedback line ("Ora impostata!") per page
 char g_note[52] = "";
-uint32_t g_note_until = 0;
+tmu::Deadline g_note_until;
 Page g_note_page = kStatus;
 
 struct TimeEdit { int Y = 2026, M = 1, D = 1, h = 12, m = 0, sel = 0; } g_te;
 struct SchedEdit { int day = 390, night = 1350; bool uniform = true; bool touched = false; } g_se;
-struct ScreenEdit { int timeout = 30, bmax = 180, bmin = 12, autob = 1; uint32_t until = 0; } g_sc;
+struct ScreenEdit { int timeout = 30, bmax = 180, bmin = 12, autob = 1; tmu::Deadline until; } g_sc;
 int g_adv_off = 0;
 
 // ------------------------------------------------------------------ helpers
-bool active(uint32_t until) { return static_cast<int32_t>(until - millis()) > 0; }
+bool active(tmu::Deadline& d) { return d.active(millis()); }
 
 void note(const char* txt) {
     strncpy(g_note, txt, sizeof g_note - 1);
-    g_note_until = millis() + 3000;
+    g_note_until.arm(millis(), 3000);
     g_note_page = g_page;
 }
 const char* noteFor(Page p) { return (g_note_page == p && active(g_note_until)) ? g_note : nullptr; }
@@ -142,7 +143,7 @@ void adjustParam(const Snapshot& s, int idx, int dir) {
     tmc::sanitize(q);
     g_pend_val = getParam(q, idx);
     g_pend_idx = idx;
-    g_pend_until = millis() + 2500;
+    g_pend_until.arm(millis(), 2500);
     post(ReqType::SetParam, idx, g_pend_val);
 }
 
@@ -172,7 +173,7 @@ bool confirmTap(int row, int side) {
         return true;
     }
     g_confirm_key = k;
-    g_confirm_until = millis() + 3000;
+    g_confirm_until.arm(millis(), 3000);
     return false;
 }
 
@@ -255,7 +256,7 @@ void enterPage(const Snapshot& s) {
                 if (w.periodAt(d, t) != simple.periodAt(d, t)) { g_se.uniform = false; break; }
         g_se.touched = false;
     } else if (g_page == kScreen) {
-        g_sc.until = 0;
+        g_sc.until.clear();
     }
 }
 
@@ -522,7 +523,7 @@ void act(int row, int code, bool repeat, const Snapshot& s) {
             if (row == 2 && adj) e.bmin = e.bmin + 2 * code < 1 ? 1 : (e.bmin + 2 * code > 255 ? 255 : e.bmin + 2 * code);
             if (row == 3) e.autob = e.autob ? 0 : 1;
             if (e.bmin > e.bmax) e.bmin = e.bmax;
-            e.until = millis() + 2500;
+            e.until.arm(millis(), 2500);
             g_sc = e;
             postScreen(e);
             break;
@@ -638,6 +639,10 @@ void open(lgfx::LGFX_Device* lcd, const Snapshot& s) {
     L = lcd;
     g_open = true;
     g_page = kStatus;
+    g_pend_until.clear();      // nothing left over from a previous visit
+    g_confirm_until.clear();
+    g_note_until.clear();
+    g_sc.until.clear();
     enterPage(s);
 }
 

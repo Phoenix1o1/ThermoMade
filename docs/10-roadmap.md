@@ -118,3 +118,25 @@
 | CYD sensor biased by box heat | Separate vented chamber, PSU in the wall pocket, learned offset, screen off |
 | Parents stuck if electronics fail | Keep the old thermostat as a spare. Short Italian "what to do" card next to the box |
 | Condo rules | Only the thermostat is replaced. Actuator, aux switch and meter untouched |
+
+## Code audit 2026-11-11 (independent review, firmware never run on hardware)
+
+Fixed in base v0.2 / node v0.1 (48 native tests):
+
+- Timeouts written as `(int32_t)(until - now) > 0` came back to life 24.9 days later (setpoint
+  jumping to 5 °C, OFF needing one tap, CYD offset learning frozen). Now `tmu::Deadline`.
+- A boost survived OFF/VIA; boost now also ends at setpoint + 2 °C.
+- Boost / ARRIVO no longer force the valve with no valid sensor (LIMP rules apply).
+- Sensor disagreement now trusts the **colder** sensor (a stuck warm reading can't hide frost).
+- Stale sensors are latched (no "fresh again" after 49.7 days), median filter restarts.
+- A settings reset no longer orphans the node or turns VIA into AUTO (`netid`, `mode` kept in
+  their own NVS keys); the node returns to HELLO after 10 reports without the base's ACK.
+
+Open (not fixed yet):
+
+- EFFICIENT recovery cap has no timeout: on a day needing > 37.5 % duty the room would stay
+  below the setpoint. Add a time limit or lift it when the temperature stops rising.
+- `forgetAll()` is called from the UI task while the radio task runs (move to the radio queue).
+- Node: worst-case loop time ~4.5 s vs the 5 s watchdog (DHT22 retry + rescan). Spread the rescan.
+- Node RTC time is accepted without a jump limit once the manual time is older than 24 h.
+- Check task stack high-water marks during bring-up.

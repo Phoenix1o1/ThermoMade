@@ -244,8 +244,10 @@ void controlTask(void*) {
         in.wall = timekeeper::wall();
         // CYD self-heating: screen on now or within the last 5 min. Signed difference: the UI task
         // may have stamped a time slightly later than this tick's `now`.
-        const int32_t since_screen = static_cast<int32_t>(now - ui::lastScreenOnMs());
-        in.base_disturbed = ui::screenOn() || since_screen < static_cast<int32_t>(cfg::kScreenDisturbHoldMs);
+        // (unsigned elapsed time: stays "long ago" for 49 days. A stamp slightly in the future,
+        // written by the UI task after this tick started, also counts as "just now".)
+        const uint32_t since_screen = now - ui::lastScreenOnMs();
+        in.base_disturbed = ui::screenOn() || since_screen < cfg::kScreenDisturbHoldMs || since_screen > 0xFFFF0000u;
         in.plant_on = true;   // central plant hours gate: not configured yet (docs/10)
         Relay::set(g_ctl.update(in));
 

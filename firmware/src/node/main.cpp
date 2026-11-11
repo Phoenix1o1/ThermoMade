@@ -2,6 +2,7 @@
 // Optional DS3231 keeps the system clock across power cuts (the house has no internet).
 // Reliability: loop watchdog, sensor retries + I2C bus recovery, MAC-level retries, channel
 // re-scan, plausibility checks, pairing stored in NVS, nothing blocks longer than ~2 s.
+#include "tm_deadline.h"
 #include <Arduino.h>
 #include <Wire.h>
 #include <esp_system.h>
@@ -19,8 +20,10 @@ Radio g_radio;
 uint32_t g_next_report_ms = 0;
 uint32_t g_last_hello_ms = 0;
 int g_fail_streak = 0;
+int g_noack_streak = 0;
+constexpr int kNoAckBeforeHello = 10;   // reports (5 min at 30 s)
 uint32_t g_led_off_ms = 0;
-uint32_t g_identify_until_ms = 0;
+tmu::Deadline g_identify;
 uint32_t g_boot_pressed_ms = 0;
 uint32_t g_reports = 0, g_acked = 0;
 ClimateReading g_last;
@@ -46,7 +49,7 @@ void ledPulse(uint32_t ms) {
 
 void serviceLed() {
     const uint32_t now = millis();
-    if (static_cast<int32_t>(g_identify_until_ms - now) > 0) {
+    if (g_identify.active(now)) {
         digitalWrite(cfg::kPinLed, (now / 100) % 2);
         return;
     }
@@ -77,7 +80,7 @@ void handleFrame(const RxFrame& f) {
         }
     } else if (type == tmp::kCmd) {
         switch (u.cmd.cmd) {
-            case tmp::kCmdIdentify: g_identify_until_ms = millis() + 10000; break;
+            case tmp::kCmdIdentify: g_identify.arm(millis(), 10000); break;
             case tmp::kCmdReboot: Serial.println("[cmd] reboot"); delay(50); ESP.restart(); break;
             case tmp::kCmdForget: g_radio.forget(); delay(50); ESP.restart(); break;
             default: break;
@@ -128,7 +131,17 @@ void report() {
     }
     if (ok) {
         g_fail_streak = 0;
+        const uint32_t acked_before = g_acked;
         drainRx(cfg::kAckWaitMs);
+        // The radio-level ACK only proves that some device with the base's MAC is on air. If the
+        // base no longer answers with its own ACK frame (it forgot this node, or its network id
+        // changed after a settings reset), go back to HELLO so the pairing can be renewed.
+        if (g_acked != acked_before) g_noack_streak = 0;
+        else if (++g_noack_streak >= kNoAckBeforeHello) {
+            Serial.println("[radio] base does not answer our reports: back to HELLO");
+            g_noack_streak = 0;
+            g_radio.forget();
+        }
     }
     if (g_last.ok)
         Serial.printf("[report] T %.2f C RH %.1f %% -> %s (sent %lu, acked %lu, sensor errors %lu)\n", g_last.t_c,

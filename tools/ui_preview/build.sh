@@ -13,7 +13,7 @@ mkdir -p "$out"
 tmp="$(mktemp -d)"
 g++ -std=gnu++17 -O1 -Wall -Wno-unused-parameter -Wno-unused-variable \
     -D TM_RELAY_ACTIVE_HIGH=1 -D TM_LCD_ST7789=1 \
-    -I "$here/fake" -I "$lgfx" -I "$fw/src/base" -I "$fw/lib/tm_control/src" \
+    -I "$here/fake" -I "$lgfx" -I "$fw/src/base" -I "$fw/lib/tm_control/src" -I "$fw/lib/tm_util/src" \
     "$here/preview_main.cpp" "$here/fake_env.cpp" "$here/fake_lgfx.cpp" \
     "$fw/src/base/ui.cpp" "$fw/src/base/ui_menu.cpp" \
     "$fw"/lib/tm_control/src/*.cpp \

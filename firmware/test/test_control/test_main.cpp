@@ -363,9 +363,9 @@ static void test_controller_boost_respects_lockout_and_expires() {
     Rig r;
     r.c.begin(0, r.p, WeekSchedule::makeDefault(), PersistentState{}, Mode::Comfort);
     r.c.startBoost(30);
-    for (int k = 0; k < 299; ++k) TEST_ASSERT_FALSE(r.step(25.0));   // boot lockout first
-    for (int k = 0; k < 20 * 60; ++k) TEST_ASSERT_TRUE(r.step(25.0));   // boost: open although warm
-    for (int k = 0; k < 10 * 60; ++k) r.step(25.0);                  // boost ends at 30 min
+    for (int k = 0; k < 299; ++k) TEST_ASSERT_FALSE(r.step(21.0));   // boot lockout first
+    for (int k = 0; k < 20 * 60; ++k) TEST_ASSERT_TRUE(r.step(21.0));   // boost: open although warm
+    for (int k = 0; k < 10 * 60; ++k) r.step(21.0);                  // boost ends at 30 min
     TEST_ASSERT_FALSE(r.c.status().boost);
     TEST_ASSERT_FALSE(r.c.status().valve_open);   // room is warm: closes after boost
 }
@@ -550,6 +550,48 @@ static void test_controller_arrival_cancelled_by_mode() {
     TEST_ASSERT_EQUAL(int(Mode::Auto), int(r.c.mode()));
 }
 
+// Audit 2026-11-11: a boost must not survive OFF/AWAY, must stop when the room is clearly above the
+// setpoint, and forced heating (boost / ARRIVO) must not run blind without any sensor.
+static void test_controller_boost_limits() {
+    Rig r;
+    r.now = 17u * 3600u * 1000u;
+    r.c.begin(r.now, r.p, WeekSchedule::makeDefault(), PersistentState{}, Mode::Comfort, true);
+    for (int k = 0; k < 30; ++k) r.step(19.0);
+    r.c.startBoost(60);
+    r.step(19.0);
+    TEST_ASSERT_TRUE(r.c.status().boost);
+    r.c.setMode(Mode::Off);
+    r.step(19.0);
+    TEST_ASSERT_FALSE(r.c.status().boost);
+    r.c.setMode(Mode::Comfort);
+    r.c.startBoost(60);
+    for (int k = 0; k < 10; ++k) r.step(22.5);       // 20 + 2 C reached
+    TEST_ASSERT_FALSE(r.c.status().boost);
+}
+
+static void test_fusion_stale_latches_and_colder_wins() {
+    ControlParams p;
+    p.median3 = false;
+    Fusion f(p);
+    uint32_t t = 1000;
+    f.onRoom(t, 20.0, 40.0);
+    f.update(t, false);
+    TEST_ASSERT_TRUE(f.out().room_ok);
+    f.update(t + 301000u, false);                     // stale
+    TEST_ASSERT_FALSE(f.out().room_ok);
+    f.update(t + 0xFFFFFFF0u, false);                 // ~49.7 days later the age wraps: still lost
+    TEST_ASSERT_FALSE(f.out().room_ok);
+    // disagreement with the CYD sensor colder than a (stuck) room sensor: the colder one is used
+    Fusion g(p);
+    t = 0;
+    for (int k = 0; k < 200; ++k, t += 30000) { g.onRoom(t, 20.0, 40.0); g.onBase(t, true, 21.0); g.update(t, false); }
+    TEST_ASSERT_TRUE(g.out().offset_ready);
+    for (int k = 0; k < 40; ++k, t += 30000) { g.onRoom(t, 20.0, 40.0); g.onBase(t, true, 6.0); g.update(t, true); }
+    TEST_ASSERT_TRUE(g.out().disagree);
+    TEST_ASSERT_EQUAL(int(TempSource::BaseOnly), int(g.out().src));
+    TEST_ASSERT_DOUBLE_WITHIN(0.2, 5.0, g.out().t_c);
+}
+
 // The big one: random user actions, sensor dropouts, plant gating and params changes for 20 days.
 // Hard rules must hold: OFF_MIN never violated, ON_MIN only shortened by forced closes,
 // setpoint always in [5, 25], u always in [0, 1].
@@ -632,6 +674,8 @@ int main(int, char**) {
     RUN_TEST(test_controller_arrival_warm_house_no_force);
     RUN_TEST(test_controller_arrival_stops_when_close_and_respects_lockout);
     RUN_TEST(test_controller_arrival_cancelled_by_mode);
+    RUN_TEST(test_controller_boost_limits);
+    RUN_TEST(test_fusion_stale_latches_and_colder_wins);
     RUN_TEST(test_controller_fuzz_hard_rules);
     return UNITY_END();
 }

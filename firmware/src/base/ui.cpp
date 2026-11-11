@@ -6,6 +6,7 @@
 #include "radio_base.h"
 #include "shared.h"
 #include "touch.h"
+#include "tm_deadline.h"
 #include "ui_menu.h"
 
 #ifndef TM_LCD_ST7789
@@ -128,8 +129,8 @@ uint32_t g_last_draw_ms = 0;
 bool g_dirty_all = true;
 // optimistic setpoint shown right after a +/- press
 double g_pending_sp = 0;
-uint32_t g_pending_until = 0;
-uint32_t g_off_arm_until = 0;      // OFF button armed (waiting for the confirming tap)
+tmu::Deadline g_pending_until;
+tmu::Deadline g_off_arm_until;     // OFF button armed (waiting for the confirming tap)
 int c_off = -1;
 // caches for change detection
 char c_mode[32], c_clock[8], c_temp[12], c_rh[16], c_sp[12], c_status[48], c_info[48];
@@ -272,7 +273,7 @@ void drawHome(const Snapshot& s) {
     field(c_rh, sizeof c_rh, &k_rh, buf, 12, 104, 160, 22, &fonts::FreeSans12pt7b, kBlue, kBg);
 
     // setpoint (optimistic while a +/- is pending)
-    const double sp = (static_cast<int32_t>(g_pending_until - millis()) > 0) ? g_pending_sp : s.st.sp;
+    const double sp = g_pending_until.active(millis()) ? g_pending_sp : s.st.sp;
     if (s.st.heating_enabled) snprintf(buf, sizeof buf, "%.1f", sp);
     else snprintf(buf, sizeof buf, "--");
     field(c_sp, sizeof c_sp, &k_sp, buf, 196, 50, 110, 28, &fonts::FreeSansBold18pt7b, kFg, kBg, true);
@@ -300,7 +301,7 @@ void drawHome(const Snapshot& s) {
         c_active = active;
     }
     // OFF button in the top bar: grey, red "OK?" while armed, red "OFF" while the heating is off
-    const bool armed = static_cast<int32_t>(g_off_arm_until - millis()) > 0;
+    const bool armed = g_off_arm_until.active(millis());
     const int off_state = s.mode == tmc::Mode::Off ? 2 : (armed ? 1 : 0);
     if (g_dirty_all || off_state != c_off) {
         for (const Btn& b : kHomeBtns)
@@ -338,13 +339,13 @@ void onPress(BtnId id, const Snapshot& s, bool repeat) {
         case kPlus: {
             if (!s.st.heating_enabled || s.mode == tmc::Mode::Off) return;   // OFF: nothing to adjust
             const double delta = id == kPlus ? 0.5 : -0.5;
-            const double base = (static_cast<int32_t>(g_pending_until - millis()) > 0) ? g_pending_sp : s.st.sp;
+            const double base = g_pending_until.active(millis()) ? g_pending_sp : s.st.sp;
             double nsp = base + delta;
             const double hi = s.mode == tmc::Mode::Away ? tmc::kAwayMaxC : tmc::kSetpointMax;   // same caps as the controller
             if (nsp < tmc::kSetpointMin) nsp = tmc::kSetpointMin;
             if (nsp > hi) nsp = hi;
             g_pending_sp = nsp;
-            g_pending_until = millis() + 2500;
+            g_pending_until.arm(millis(), 2500);
             post(ReqType::SetSetpoint, 0, nsp);
             break;
         }
@@ -353,11 +354,11 @@ void onPress(BtnId id, const Snapshot& s, bool repeat) {
         case kNight: if (!repeat) post(ReqType::SetMode, static_cast<int32_t>(tmc::Mode::Night)); break;
         case kOff:
             if (repeat || s.mode == tmc::Mode::Off) break;
-            if (static_cast<int32_t>(g_off_arm_until - millis()) > 0) {   // second tap: switch off
-                g_off_arm_until = 0;
+            if (g_off_arm_until.active(millis())) {   // second tap: switch off
+                g_off_arm_until.clear();
                 post(ReqType::SetMode, static_cast<int32_t>(tmc::Mode::Off));
             } else {
-                g_off_arm_until = millis() + 3000;
+                g_off_arm_until.arm(millis(), 3000);
             }
             break;
         case kAway:
@@ -505,6 +506,8 @@ void loop() {
     handleTouch(s);
     const uint32_t now = millis();
     light::poll(now, !g_on && now - g_off_since_ms >= 1000u);
+    (void)g_pending_until.active(now);   // polled every loop so expired deadlines stay expired
+    (void)g_off_arm_until.active(now);
     if (g_on) {
         g_last_on_ms = now;
         uint32_t timeout_s = g_set.screen_timeout_s;

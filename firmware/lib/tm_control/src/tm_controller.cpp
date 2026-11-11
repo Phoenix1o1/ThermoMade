@@ -5,6 +5,7 @@ namespace tmc {
 namespace {
 constexpr uint64_t kBootGraceMs = 90000;   // wait for the first sensor frames before LIMP
 constexpr double kBandAwayMaxC = kAwayMaxC;
+constexpr double kBoostMaxOverC = 2.0;   // a boost ends once the room is this far above the setpoint
 
 double clampD(double v, double lo, double hi) { return v < lo ? lo : (v > hi ? hi : v); }
 uint32_t msToS(uint32_t ms) { return ms == kForeverMs ? UINT32_MAX : (ms + 999u) / 1000u; }
@@ -58,6 +59,7 @@ void Controller::setMode(Mode m) {
     prev_mode_ = mode_;
     mode_ = m;
     override_active_ = false;
+    if (m == Mode::Off || m == Mode::Away) boost_ = false;   // leaving / switching off ends a boost
     if (arrival_ && m != Mode::Auto) {   // any other mode choice cancels the forced start
         arrival_ = false;
         pushEvent(EventType::Arrival, 0);
@@ -173,6 +175,7 @@ bool Controller::update(const ControllerInputs& in) {
     // ---- setpoint ----
     const Resolved r = resolve(in.wall);
     if (boost_ && uptime_ms_ >= boost_until_ms_) boost_ = false;
+    if (boost_ && have_t && T >= r.sp + kBoostMaxOverC) boost_ = false;   // boost never runs away
     if (arrival_) {
         if (!arrival_started_) arrival_until_ms_ = uptime_ms_ + static_cast<uint64_t>(p_.arrival_force_min) * 60000u;
         // ends after the time, or as soon as the room is close to the setpoint (also right away
@@ -226,7 +229,7 @@ bool Controller::update(const ControllerInputs& in) {
         rq.force_close = true;
         rq.close_reason = ValveReason::PlantOff;
         u_ = 0.0;
-    } else if (boost_ || arrival_) {
+    } else if ((boost_ || arrival_) && have_t) {   // blind forcing is not allowed: no sensor -> LIMP path
         // forced heating: open as soon as the FSM allows (OFF_MIN is never shortened)
         const ValveReason why = boost_ ? ValveReason::Boost : ValveReason::Arrival;
         rq.demand = true;

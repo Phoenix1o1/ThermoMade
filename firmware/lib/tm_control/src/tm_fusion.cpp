@@ -69,6 +69,18 @@ const FusionOut& Fusion::update(uint32_t now_ms, bool base_disturbed) {
     have_last_update_ = true;
     last_update_ms_ = now_ms;
 
+    // Latch staleness: after 49.7 days the unsigned age would wrap and a dead sensor would look
+    // fresh again. A sensor that went stale must deliver a new sample to come back, and its
+    // median filter restarts (no old value mixed into the first new readings).
+    if (have_room_ && now_ms - room_rx_ms_ > stale_ms) {
+        have_room_ = false;
+        room_med_.reset();
+        slope_init_ = false;
+    }
+    if (have_base_ && now_ms - base_rx_ms_ > stale_ms) {
+        have_base_ = false;
+        base_med_.reset();
+    }
     out_.room_age_ms = have_room_ ? now_ms - room_rx_ms_ : UINT32_MAX;
     out_.room_ok = have_room_ && out_.room_age_ms <= stale_ms;
     out_.base_ok = have_base_ && (now_ms - base_rx_ms_) <= stale_ms;
@@ -104,6 +116,13 @@ const FusionOut& Fusion::update(uint32_t now_ms, bool base_disturbed) {
     if (out_.room_ok && out_.base_ok && out_.offset_ready && !out_.disagree) {
         out_.src = TempSource::Fused;
         out_.t_c = p.w_room * out_.t_room + (1.0 - p.w_room) * out_.t_base_corr;
+    } else if (out_.room_ok && out_.base_ok && out_.offset_ready) {
+        // Disagreement: one of the two is wrong and we cannot know which. Trust the COLDER one:
+        // a sensor frozen at a warm value must never hide a freezing house (worst case: some
+        // extra heating until the alarm is looked at).
+        const bool room_colder = out_.t_room <= out_.t_base_corr;
+        out_.src = room_colder ? TempSource::RoomOnly : TempSource::BaseOnly;
+        out_.t_c = room_colder ? out_.t_room : out_.t_base_corr;
     } else if (out_.room_ok) {
         out_.src = TempSource::RoomOnly;
         out_.t_c = out_.t_room;

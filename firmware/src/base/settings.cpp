@@ -56,12 +56,24 @@ namespace settings {
 
 Settings load() {
     Settings s;
-    if (!loadBlob("cfg", &s)) {
+    const bool cfg_ok = loadBlob("cfg", &s);
+    if (!cfg_ok) {
         Serial.println("[settings] no valid settings in NVS -> defaults");
         s = Settings{};
     }
     tmc::sanitize(s.params);
     s.schedule.sanitize();
+    // net_id and mode also live under their own keys: a settings layout change or a damaged blob
+    // must not orphan the paired nodes (new random net_id) or turn an AWAY house back to AUTO.
+    {
+        Preferences pr;
+        if (pr.begin("termomade", true)) {
+            const uint8_t nid = pr.getUChar("netid", 0), md = pr.getUChar("mode", 0xFF);
+            pr.end();
+            if (!cfg_ok && nid != 0) s.net_id = nid;
+            if (!cfg_ok && md <= 4) s.mode = static_cast<tmc::Mode>(md);
+        }
+    }
     if (static_cast<uint8_t>(s.mode) > 4) s.mode = tmc::Mode::Auto;
     if (s.screen_timeout_s < 10) s.screen_timeout_s = 30;
     if (s.brightness < 10) s.brightness = 180;
@@ -76,7 +88,15 @@ Settings load() {
     return s;
 }
 
-bool save(const Settings& s) { return saveBlob("cfg", s); }
+bool save(const Settings& s) {
+    Preferences pr;
+    if (pr.begin("termomade", false)) {
+        if (pr.getUChar("netid", 0) != s.net_id) pr.putUChar("netid", s.net_id);
+        if (pr.getUChar("mode", 0xFF) != static_cast<uint8_t>(s.mode)) pr.putUChar("mode", static_cast<uint8_t>(s.mode));
+        pr.end();
+    }
+    return saveBlob("cfg", s);
+}
 
 bool loadPersistent(tmc::PersistentState* ps) { return loadBlob("ps", ps); }
 
