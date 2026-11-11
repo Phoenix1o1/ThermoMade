@@ -7,6 +7,13 @@ Architecture and conventions: [docs/08-software.md](../docs/08-software.md). Con
 > **Bench first.** Do every step below on the desk with a lamp or an LED on the relay contacts,
 > never on the valve. Mains wiring only after the 24 h soak test passes.
 
+## Check everything with one command
+
+```bash
+tools/check.sh           # from the repo root: tests, builds, golden vectors, screens, web page
+tools/check.sh --quick   # without the firmware builds
+```
+
 ## 1. Set up
 
 1. VS Code + the PlatformIO extension. Open the `firmware/` folder (not the repo root).

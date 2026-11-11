@@ -85,6 +85,12 @@ Commands (in `firmware/`): `pio test -e native` · `pio run -e base_cyd` · `pio
 · `pio run -e node_dht22`. After changing the simulator or the control spec, regenerate
 `test/test_golden/golden_data.h` with `python3 tools/sim/gen_golden.py` (not `-I`).
 
+## Checking changes (do this, don't run steps by hand)
+
+`tools/check.sh` runs everything and prints one PASS/FAIL line per step (unit tests, 3 builds,
+warnings, golden vectors, screen render, web page in a browser against the mock, log tool).
+`tools/check.sh --quick` skips the builds. CI (`.github/workflows/ci.yml`) runs the same on push.
+
 ## Firmware map
 
 - `lib/tm_control` (`namespace tmc`): `Controller` = whole thermostat (params, schedule, fusion,

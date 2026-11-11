@@ -1,15 +1,18 @@
 #include "web.h"
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
+#include <Update.h>
 #include <cmath>
 #include "base_config.h"
 #include "param_table.h"
+#include "radio_base.h"
 #include "shared.h"
 #include "tm_util.h"
 #include "web_page.h"
 
 namespace {
 AsyncWebServer g_srv(80);
+bool g_ota_ok = false;
 
 // request argument from the form body or the query string; nullptr if absent
 const char* arg(AsyncWebServerRequest* rq, const char* name) {
@@ -92,6 +95,7 @@ void handleStatus(AsyncWebServerRequest* rq) {
         if (d0.slot[k].period == tmc::Period::Night && d0.slot[k].start_min > day && night < 0) night = d0.slot[k].start_min;
     o->printf("\"sched_day\":%d,\"sched_night\":%d,\"scr_timeout\":%u,\"scr_max\":%u,\"scr_min\":%u,\"scr_auto\":%u,",
               day, night, s.cfg.screen_timeout_s, s.cfg.brightness, s.cfg.brightness_min, s.cfg.auto_brightness);
+    o->printf("\"pairing\":%s,", s.pairing_open ? "true" : "false");
     o->printf("\"fw\":\"%d.%d\",\"uptime_s\":%lu,\"reset\":\"%s\"}", TM_FW_MAJOR, TM_FW_MINOR,
               static_cast<unsigned long>(st.uptime_ms / 1000u), s.reset_reason);
     rq->send(o);
@@ -133,6 +137,7 @@ void handleCmd(AsyncWebServerRequest* rq) {
     else if (!strcmp(c, "stop")) ok = post(ReqType::StopBoost);
     else if (!strcmp(c, "arrive")) ok = post(ReqType::Arrive);
     else if (!strcmp(c, "save")) ok = post(ReqType::SaveNow);
+    else if (!strcmp(c, "pair")) { radio_base::openPairing(); ok = true; }   // 60 s window, like the touch screen
     else if (!strcmp(c, "time") && hv && v > 0 && v < 4294967295.0 && tmu::plausibleUnix(static_cast<uint32_t>(v)))
         ok = post(ReqType::SetTime, 0, 0.0, static_cast<uint32_t>(v));
     else if (!strcmp(c, "sched")) {      // one rule for all days: v = Comfort start, v2 = Night start (minutes)
@@ -170,6 +175,27 @@ void begin() {
     g_srv.on("/api/params", HTTP_GET, handleParams);
     g_srv.on("/api/set", HTTP_POST, handleSet);
     g_srv.on("/api/cmd", HTTP_POST, handleCmd);
+    // Firmware update: upload the base's firmware.bin. It is written to the spare app slot and
+    // checked by the Update library; only a complete, valid image is activated. The reboot goes
+    // through the control task (settings saved; the valve closes and the 5 min boot pause applies).
+    g_srv.on(
+        "/api/update", HTTP_POST,
+        [](AsyncWebServerRequest* rq) {
+            const bool ok = g_ota_ok && !Update.hasError();
+            reply(rq, ok, ok ? "update written, restarting" : "update failed, old firmware kept");
+            if (ok) post(ReqType::Reboot);
+            g_ota_ok = false;
+        },
+        [](AsyncWebServerRequest*, String, size_t index, uint8_t* data, size_t len, bool final) {
+            if (index == 0) {
+                Update.abort();   // drop a previous broken upload
+                g_ota_ok = len > 0 && data[0] == 0xE9 && Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH);
+                Serial.printf("[ota] upload started: %s\n", g_ota_ok ? "ok" : "REJECTED (not an ESP32 image?)");
+            }
+            if (g_ota_ok && len && Update.write(data, len) != len) g_ota_ok = false;
+            if (final && g_ota_ok) g_ota_ok = Update.end(true);
+            if (final) Serial.printf("[ota] upload finished: %s\n", g_ota_ok ? "ok" : "FAILED");
+        });
     g_srv.onNotFound([](AsyncWebServerRequest* rq) { rq->send(404, "text/plain", "not found"); });
     g_srv.begin();
     Serial.println("[web] http://192.168.4.1");

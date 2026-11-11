@@ -68,6 +68,19 @@ pre{white-space:pre-wrap;font-size:13px;color:var(--dim);margin:0}
  <div class="row"><button onclick="applyScreen()">Applica schermo</button>
   <button onclick="cmd('save')">Salva adesso</button></div>
 </details>
+<details><summary>Sensori</summary>
+ <p id="nodeinfo" class="dim"></p>
+ <div class="row"><button id="pair" onclick="cmd('pair')">Accoppia sensore (60 s)</button></div>
+ <p class="dim">I sensori non hanno una pagina propria: parlano solo con il termostato. Per accoppiare: premi qui, poi
+ accendi o resetta il sensore entro 60 s. La correzione del sensore stanza è il parametro <b>room_offset_c</b>.</p>
+</details>
+<details><summary>Aggiornamento firmware</summary>
+ <p class="dim">Scegli il file <b>firmware.bin</b> della base (non quello del sensore). La valvola si chiude e il
+ termostato riparte; pausa di 5 minuti dopo il riavvio.</p>
+ <input type="file" id="fw" accept=".bin" style="width:100%">
+ <div class="row" style="margin-top:8px"><button id="fwbtn" onclick="update()">Aggiorna</button></div>
+ <p id="fwmsg" class="dim"></p>
+</details>
 <details id="adv"><summary>Parametri avanzati (tutti)</summary>
  <p class="dim">Ogni modifica vale subito ed è salvata dopo 10 s. I valori fuori scala sono corretti dal termostato.</p>
  <table id="ptab"></table>
@@ -122,6 +135,8 @@ valvola ${s.valve?'APERTA':'chiusa'} (${s.reason})  prossima ${s.next_s}s  blocc
 allarmi 0x${s.alarms.toString(16)}  rugiada ${s.dew}  luce ${s.light}%
 nodo ${s.node?s.node_age_s+' s fa, '+s.rssi+' dBm':'NON accoppiato'}  SD ${s.sd?'ok':'NO'}
 fw ${s.fw}  acceso da ${Math.floor(s.uptime_s/3600)}h${Math.floor(s.uptime_s%3600/60)}m  reset ${s.reset}`;
+ $('nodeinfo').textContent=s.node?('Sensore stanza: '+(s.t_room==null?'nessun dato':s.t_room.toFixed(2)+' °C')+', ultimo dato '+s.node_age_s+' s fa, segnale '+s.rssi+' dBm'):'Nessun sensore accoppiato';
+ $('pair').className=s.pairing?'on':'';$('pair').textContent=s.pairing?'Accoppiamento aperto…':'Accoppia sensore (60 s)';
  if(!cfgFilled){cfgFilled=true;if(s.sched_day>=0)$('sd').value=hm(s.sched_day);if(s.sched_night>=0)$('sn').value=hm(s.sched_night);
   $('st').value=s.scr_timeout;$('sx').value=s.scr_max;$('sm').value=s.scr_min;$('sa').value=s.scr_auto}
 }
@@ -130,6 +145,10 @@ function syncTime(s){ // the phone is the best clock: set it when unknown or mor
  if(Date.now()-timeSent>60000&&(!s.time_valid||Math.abs(s.unix-now)>30)){timeSent=Date.now();cmd('time',now)}}
 function poll(){fetch('/api/status').then(r=>r.json()).then(s=>{S=s;$('conn').textContent='';render();syncTime(s)})
  .catch(()=>{$('conn').textContent='Termostato non raggiungibile (sei collegato al Wi-Fi TermoMade?)'})}
+function update(){const f=$('fw').files[0];if(!f){$('fwmsg').textContent='Scegli un file';return}
+ const d=new FormData();d.append('fw',f,f.name);$('fwbtn').disabled=true;$('fwmsg').textContent='Invio in corso… non spegnere';
+ fetch('/api/update',{method:'POST',body:d}).then(r=>r.json()).then(r=>{$('fwmsg').textContent=r.ok?'Fatto: il termostato si riavvia':'Errore: firmware precedente mantenuto'})
+ .catch(()=>{$('fwmsg').textContent='Errore di collegamento'}).finally(()=>{$('fwbtn').disabled=false})}
 function sched(){const a=mins($('sd').value),b=mins($('sn').value);if(isNaN(a)||isNaN(b)||a==b)return;cmd('sched',a,{v2:b})}
 function applyScreen(){cmd('screen',$('st').value,{v2:$('sx').value,v3:$('sm').value,v4:$('sa').value})}
 function loadParams(){fetch('/api/params').then(r=>r.json()).then(ps=>{const t=$('ptab');t.innerHTML='';

@@ -3,7 +3,7 @@
 #include <cstdint>
 
 #define TM_FW_MAJOR 0
-#define TM_FW_MINOR 3
+#define TM_FW_MINOR 4
 
 #ifndef TM_RELAY_ACTIVE_HIGH
 #error "Set -D TM_RELAY_ACTIVE_HIGH=1 (active-HIGH module) or 0 (active-LOW module) in platformio.ini"

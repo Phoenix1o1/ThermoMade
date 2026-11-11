@@ -196,6 +196,7 @@ are clamped. **Change these only if you know why**; `RIPRISTINO DI FABBRICA` res
 | `classic_hyst_c` | 0.2 °C | 0.05–2 | 0.05 | Classic thermostat hysteresis |
 | `cont_warn_s` | 14400 s | 600–86400 | 1800 | "Valve open too long" alarm |
 | `budget_min_day` | 0 (off) | 0–1440 | 10 | Daily billed-minutes alarm |
+| `room_offset_c` | 0 °C | −5–5 | 0.1 | Calibration added to the room node's temperature |
 | `rh_low` / `rh_high` / `rh_hyst` | 35 / 60 / 3 % | 10–60 / low+5–95 / 0.5–10 | 1 / 1 / 0.5 | Humidity advice thresholds |
 
 ### 8 SISTEMA
@@ -242,6 +243,13 @@ Connect a phone or PC to the base's Wi-Fi (`TermoMade-XXXX`, password from `secr
 - **Parametri avanzati**: every control parameter (same names as the console and the AVANZATE
   page). A change applies at once, is clamped to the allowed range and saved after 10 s.
 - **Diagnostica**: the STATO page's values.
+- **Sensori**: room sensor state and the pairing button. The satellite sensors have **no web
+  page of their own**: they only talk to the base over ESP-NOW, and everything about them is
+  shown and set here or on the SENSORI page. Their sensor type (SHT4x / DHT22) is fixed when
+  the node firmware is built; the room reading can be corrected with `room_offset_c` (±5 °C).
+- **Aggiornamento firmware** (v0.4): upload the base's `firmware.bin` (from PlatformIO or the
+  GitHub Actions artifacts). It goes to the spare slot; only a complete valid image is
+  activated, then the base restarts (valve closed, 5 min pause). Nodes are still updated by USB.
 - Protection: the Wi-Fi password only (no PIN yet). Anyone on that Wi-Fi can change settings.
 
 The page and the touch screen use the same request path into the control task, so the hard
@@ -252,7 +260,8 @@ rules (valve pauses, setpoint limits) hold whatever the page sends.
 | `GET /api/status` | JSON: temperatures, setpoint, mode, valve, timers, alarms, clock, counters, node, schedule and screen settings |
 | `GET /api/params` | JSON list: `name`, `value`, `unit`, `step`, `kind` (1 = on/off or choice) |
 | `POST /api/set` `name=&value=` | Change one parameter |
-| `POST /api/cmd` `c=mode&v=0..4` · `c=sp&v=` · `c=adj&v=` · `c=boost&v=min` · `c=stop` · `c=arrive` · `c=time&v=unix` · `c=sched&v=dayMin&v2=nightMin` · `c=screen&v=timeout&v2=max&v3=min&v4=auto` · `c=save` | Commands (form-encoded) |
+| `POST /api/update` (multipart file) | Firmware update of the base |
+| `POST /api/cmd` `c=mode&v=0..4` · `c=sp&v=` · `c=adj&v=` · `c=boost&v=min` · `c=stop` · `c=arrive` · `c=time&v=unix` · `c=sched&v=dayMin&v2=nightMin` · `c=screen&v=timeout&v2=max&v3=min&v4=auto` · `c=pair` · `c=save` | Commands (form-encoded) |
 
 Try the page without hardware: `python3 tools/web_mock/mock_server.py` → http://localhost:8080
 (fake API with a little state). Not yet: graphs, per-day schedule, pairing, OTA, PIN.

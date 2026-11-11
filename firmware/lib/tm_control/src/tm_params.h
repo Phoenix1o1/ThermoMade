@@ -75,6 +75,9 @@ struct ControlParams {
     double rh_low = 35.0;
     double rh_high = 60.0;
     double rh_hyst = 3.0;
+
+    // calibration of the room node's reading (added to every sample), e.g. against a reference thermometer
+    double room_offset_c = 0.0;
 };
 
 // Clamp every field into its allowed range. Returns true if something was changed.

@@ -89,6 +89,7 @@ bool sanitize(ControlParams& p) {
     ch |= clampField(p.rh_low, 10.0, 60.0);
     ch |= clampField(p.rh_high, p.rh_low + 5.0, 95.0);
     ch |= clampField(p.rh_hyst, 0.5, 10.0);
+    ch |= clampField(p.room_offset_c, -5.0, 5.0);
     if (p.u_min >= p.u_cont) { p.u_min = 0.03; p.u_cont = 0.90; ch = true; }
     if (p.t_valid_min_c >= p.t_valid_max_c) { p.t_valid_min_c = -20.0; p.t_valid_max_c = 50.0; ch = true; }
     if (static_cast<uint8_t>(p.recovery_schedule) > 1) { p.recovery_schedule = Recovery::Efficient; ch = true; }

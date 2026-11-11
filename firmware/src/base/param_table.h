@@ -36,6 +36,7 @@ static const ParamDesc kParams[] = {
     TM_P(limp_default, F64, "", 0.01),        TM_E(algo, "0=pulse 1=classic 2=alt", 2),
     TM_P(classic_hyst_c, F64, "C", 0.05),     TM_P(cont_warn_s, U32, "s", 1800),      TM_P(budget_min_day, U32, "min", 10),
     TM_P(rh_low, F64, "%", 1),                TM_P(rh_high, F64, "%", 1),             TM_P(rh_hyst, F64, "%", 0.5),
+    TM_P(room_offset_c, F64, "C", 0.1),
 };
 #undef TM_P
 #undef TM_E

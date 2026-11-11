@@ -124,7 +124,7 @@ public:
     bool paramsChanged() { bool c = params_dirty_; params_dirty_ = false; return c; }
 
     // --- sensor feed ---
-    void onRoomSample(uint32_t now_ms, double t_c, double rh) { fusion_.onRoom(now_ms, t_c, rh); }
+    void onRoomSample(uint32_t now_ms, double t_c, double rh) { fusion_.onRoom(now_ms, t_c + p_.room_offset_c, rh); }
     void onBaseSample(uint32_t now_ms, bool ok, double t_c) { fusion_.onBase(now_ms, ok, t_c); }
 
     // --- main step: returns true if the relay must be ON (valve OPEN) ---
