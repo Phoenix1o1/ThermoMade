@@ -19,6 +19,7 @@
 | D22 | Arrival at the cold house | **ARRIVO button: AUTO + valve forced open 60 min (stops within 2 °C of the setpoint), then efficient pulse recovery.** Chosen from `tools/sim/arrival_study.py` ([04 §5.1](04-control-algorithm.md#51-arrivo-arriving-at-the-cold-house-decided-2026-11-09-with-toolssimarrival_studypy)). Continuous heating until warm would cost ~8.5 billed hours more per arrival |
 | D26 | OFF button | **On Home** (top bar), two taps to confirm (2026-11-11) |
 | D27 | Next feature | **Web page + JSON API** first; planned return (D23) low priority: the return date is rarely known |
+| D28 | Web access protection | Wi-Fi password only for now (no PIN); revisit with the Android app |
 | D24 | Light sensing | **CYD's own LDR** (GPIO 34), sampled with the screen dark, self-learning scale → auto-brightness + log. No extra sensor (a BH1750 on the room node only if calibrated lux is ever needed) |
 | — | Extra requirements | Night setback schedule, Android app for the parents, screen off after 30 s, 2-part OpenSCAD box on the 503 box with PSU inside |
 
@@ -77,7 +78,8 @@
 - [ ] **Bring-up on the bench** ([firmware/README.md](../firmware/README.md)): colour test, touch
       calibration, relay stays off through reset/flash, DS18B20, pairing, 24 h soak with a lamp or
       LED instead of the valve
-- [ ] Time from the phone (needs the web page, Phase 3) — until then: console `time` once, then
+- [x] **Base v0.3: web page + JSON API** (status, controls, all parameters, schedule, screen; the phone sets the clock). Tested in a browser against a mock API, not on hardware
+- [x] Time from the phone (web page) — until then: console `time` once, then
       the node's DS3231 keeps it
 - [ ] Temporary enclosure (or v1 of the printed one) + safe mains wiring
 - [ ] Install, run 1–2 weeks, then CLASSIC alternate days for the A/B comparison

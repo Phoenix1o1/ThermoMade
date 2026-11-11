@@ -227,37 +227,35 @@ are clamped. **Change these only if you know why**; `RIPRISTINO DI FABBRICA` res
 Short beep on setpoint change (optional). Triple beep on alarms, repeated every 30 min, **only
 between 08:00 and 21:00**, and it can be muted from the banner.
 
-## Web UI
+## Web page and JSON API (base v0.3)
 
-Served by the base on its AP: `http://192.168.4.1` or `http://termomade.local`.
-HTML/JS/CSS gzipped in LittleFS, no external CDN (no internet on site).
+Connect a phone or PC to the base's Wi-Fi (`TermoMade-XXXX`, password from `secrets.h`) and open
+**http://192.168.4.1**. No internet needed; the page has no external files.
 
-| Path | Audience | Content |
-|---|---|---|
-| `/` (simple) | Parents (via the app) | Same as the CYD Home: big temp, +/−, Giorno/Notte/Via, state line. Italian, large touch targets |
-| `/advanced` | Andrea | Status, History chart (uPlot) 24 h/7 d, Schedule editor, Sensors, Settings, Advanced, System |
-| `/advanced/system` | Andrea | Firmware version, **OTA upload**, settings backup/restore (JSON), CSV downloads, reboot |
+<img src="img/ui/web_home.png" width="260"> <img src="img/ui/web_settings.png" width="200">
 
-**Time sync:** every page load POSTs the phone's time and time zone. In this house that is the best
-time source ([06](06-communication.md#time-distribution)).
+- Live status every 2 s, setpoint −/+, AUTO / GIORNO / NOTTE / VIA→ARRIVO, OFF (two taps),
+  Boost 60' / Stop, today's open minutes and pulses.
+- **The phone sets the clock**: when the base's time is unknown or more than 30 s off, the page
+  sends the phone's time (best time source; the room node's RTC follows it).
+- **Impostazioni**: day/night start for all days, screen timeout and brightness, save now.
+- **Parametri avanzati**: every control parameter (same names as the console and the AVANZATE
+  page). A change applies at once, is clamped to the allowed range and saved after 10 s.
+- **Diagnostica**: the STATO page's values.
+- Protection: the Wi-Fi password only (no PIN yet). Anyone on that Wi-Fi can change settings.
 
-### JSON API (draft)
+The page and the touch screen use the same request path into the control task, so the hard
+rules (valve pauses, setpoint limits) hold whatever the page sends.
 
-| Method & path | Body / reply |
+| Endpoint | Purpose |
 |---|---|
-| `GET /api/status` | `{t, t_room, t_base, rh, sp, mode, period, valve, next_s, u, p, i, billed_today_s, pulses_today, time_src, alarms:[...]}` |
-| `POST /api/setpoint` | `{sp, scope: "period"\|"schedule"}` (clamped 5–25 °C) |
-| `POST /api/mode` | `{mode, boost_min?, until?}` (e.g. Away until a date) |
-| `GET/POST /api/schedule` | weekly program |
-| `GET/POST /api/config` | settings JSON (validated, versioned) |
-| `GET /api/history?h=24` | compact arrays from the RAM buffer |
-| `GET /api/log/2026-11-09.csv` | daily file from SD |
-| `POST /api/time` | `{epoch_ms, tz}` |
-| `POST /api/nodes/pair`, `PATCH /api/nodes/{mac}` | pairing and node edits |
-| `POST /update` | OTA firmware upload |
+| `GET /api/status` | JSON: temperatures, setpoint, mode, valve, timers, alarms, clock, counters, node, schedule and screen settings |
+| `GET /api/params` | JSON list: `name`, `value`, `unit`, `step`, `kind` (1 = on/off or choice) |
+| `POST /api/set` `name=&value=` | Change one parameter |
+| `POST /api/cmd` `c=mode&v=0..4` · `c=sp&v=` · `c=adj&v=` · `c=boost&v=min` · `c=stop` · `c=arrive` · `c=time&v=unix` · `c=sched&v=dayMin&v2=nightMin` · `c=screen&v=timeout&v2=max&v3=min&v4=auto` · `c=save` | Commands (form-encoded) |
 
-All writes go through the same validated "request" path as the touch UI. A simple PIN protects
-`/advanced` (the AP password protects everything).
+Try the page without hardware: `python3 tools/web_mock/mock_server.py` → http://localhost:8080
+(fake API with a little state). Not yet: graphs, per-day schedule, pairing, OTA, PIN.
 
 ## Serial console (115200 baud, implemented in v0.1)
 

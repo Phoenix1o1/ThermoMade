@@ -26,6 +26,7 @@
 #include "timekeeper.h"
 #include "tm_protocol.h"
 #include "ui.h"
+#include "web.h"
 
 #if __has_include("secrets.h")
 #include "secrets.h"
@@ -323,6 +324,7 @@ void setup() {
     Serial.println("[wifi] WARNING: default AP password - create include/secrets.h (see secrets.h.example)");
 #endif
     radio_base::begin(g_cfg.net_id, g_cfg.ap_channel, ssid, TM_AP_PASS);
+    web::begin();
 
     logger::begin();
     char line[96];

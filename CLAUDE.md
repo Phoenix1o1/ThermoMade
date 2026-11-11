@@ -28,7 +28,7 @@ Phase 0 planning done (2026-11-09). D1–D5, D7, D9, D10, D19, D20, D22, D24 ans
 ST7789; PlatformIO; room sensor SHT4x or DHT22; CYD sensor DS18B20).
 Enclosure v1 exists: `hardware/enclosures/termomade_box.scad` + STLs (not yet test-printed).
 **Firmware written (2026-11-09): base v0.2, node v0.1, compiles, 46 native tests pass, NOT yet run
-on hardware.** Base v0.2 = ARRIVO button (D22), 8 hidden settings pages (manual date/time, all
+on hardware.** Base v0.3 adds the web page/JSON API (config on the fly, phone sets the clock). v0.2 = ARRIVO button (D22), 8 hidden settings pages (manual date/time, all
 parameters), LDR light sensing + auto-brightness (D24). Bring-up: `firmware/README.md`.
 **Open: D13 (neutral in the 503 box?), D18 (relay module active-HIGH/LOW →
 `TM_RELAY_ACTIVE_HIGH`), D21 (panel colours/touch cal), D23 (planned return), D25 (LDR hole)**
@@ -92,7 +92,8 @@ Commands (in `firmware/`): `pio test -e native` · `pio run -e base_cyd` · `pio
 - `lib/tm_protocol` (`tmp`): ESP-NOW frames v1. `lib/tm_util` (`tmu`): CRC, decoders, dates.
 - `src/base`: control task owns Controller + Settings + relay; UI/console/radio talk to it only
   through `shared.h` (request queue, schedule mailbox, Snapshot). `ui.cpp` = Home,
-  `ui_menu.cpp` = hidden pages (long-press clock), `light.cpp` = LDR.
+  `ui_menu.cpp` = hidden pages (long-press clock), `light.cpp` = LDR, `web.cpp` + `web_page.h` =
+  web page/JSON API at 192.168.4.1 (ESPAsyncWebServer; test with `tools/web_mock/mock_server.py`).
 - UI changes: render with `tools/ui_preview/build.sh` (real UI code on the PC → `docs/img/ui/`)
   and look at the PNGs before committing.
 - `tools/sim/arrival_study.py`: arrival scenarios; `ForcedStart` in `thermal_sim.py` mirrors

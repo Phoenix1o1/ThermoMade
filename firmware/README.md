@@ -64,6 +64,12 @@ On every boot the screen shows three bars for 1.5 s:
 - [ ] Light: cover / uncover the LDR with the screen dark for a minute; `status` → `light` %
       changes (needs the scale learned: one dark and one bright reading).
 
+### Web page
+
+Join the Wi-Fi `TermoMade-XXXX` with a phone and open http://192.168.4.1. The clock sets itself
+from the phone; change a parameter under "Parametri avanzati" and check it with `get <name>` on
+the console.
+
 ## 4. Room node (ESP32 DevKit)
 
 Wiring: I²C SDA **21**, SCL **22**, 3.3 V. SHT4x (0x44) and DS3231 (0x68) on the same bus.
