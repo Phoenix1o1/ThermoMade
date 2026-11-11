@@ -381,6 +381,7 @@ static void test_controller_plant_off_closes_immediately() {
 
 static void test_controller_efficient_recovery_caps_u() {
     Rig r;
+    r.p.recovery_schedule = r.p.recovery_arrival = Recovery::Efficient;   // ECO profile
     r.c.begin(0, r.p, WeekSchedule::makeDefault(), PersistentState{}, Mode::Auto);
     r.c.status();
     // start at 03:00 (Night 18.5), room at 17.0; preheat starts Comfort at 05:30
@@ -483,6 +484,7 @@ static void test_controller_reset_learning() {
 // with EFFICIENT recovery (u <= uc). Decided with tools/sim/arrival_study.py.
 static void test_controller_arrival_cold_house() {
     Rig r;
+    r.p.recovery_schedule = r.p.recovery_arrival = Recovery::Efficient;   // ECO profile
     r.now = 17u * 3600u * 1000u;            // 17:00, Comfort period
     r.c.begin(r.now, r.p, WeekSchedule::makeDefault(), PersistentState{}, Mode::Away, /*start_unlocked=*/true);
     for (int k = 0; k < 60; ++k) r.step(7.5);
@@ -614,6 +616,23 @@ static void test_controller_counters_survive_reboot() {
     TEST_ASSERT_EQUAL_UINT32(0, next.c.status().billed_today_s);
 }
 
+// BALANCED recovery: no cap while far (> recovery_wide_c) below the setpoint, pulses only when closer.
+static void test_controller_balanced_recovery() {
+    Rig r;
+    r.now = 12u * 3600u * 1000u;
+    r.c.begin(r.now, r.p, WeekSchedule::makeDefault(), PersistentState{}, Mode::Night, true);
+    for (int k = 0; k < 120; ++k) r.step(15.0);
+    r.c.setMode(Mode::Comfort);                       // 18.5 -> 20: a rise, room 5 C below
+    for (int k = 0; k < 120; ++k) r.step(15.0);
+    TEST_ASSERT_TRUE(r.c.status().recovering);
+    TEST_ASSERT_EQUAL(int(Recovery::Balanced), int(r.c.status().recovery));
+    TEST_ASSERT_TRUE(r.c.status().u > 0.9);           // far: valve may stay open
+    for (int k = 0; k < 600; ++k) {
+        r.step(19.0);                                 // within 1.5 C: pulses only
+        if (k > 60) TEST_ASSERT_TRUE(r.c.status().u <= crossoverDuty(r.p) + 1e-12);
+    }
+}
+
 // The big one: random user actions, sensor dropouts, plant gating and params changes for 20 days.
 // Hard rules must hold: OFF_MIN never violated, ON_MIN only shortened by forced closes,
 // setpoint always in [5, 25], u always in [0, 1].
@@ -699,6 +718,7 @@ int main(int, char**) {
     RUN_TEST(test_controller_boost_limits);
     RUN_TEST(test_fusion_stale_latches_and_colder_wins);
     RUN_TEST(test_controller_counters_survive_reboot);
+    RUN_TEST(test_controller_balanced_recovery);
     RUN_TEST(test_controller_fuzz_hard_rules);
     return UNITY_END();
 }

@@ -70,6 +70,7 @@ bool sanitize(ControlParams& p) {
     ch |= clampField(p.sp_night, kSetpointMin, kSetpointMax);
     ch |= clampField(p.sp_away, kSetpointMin, kAwayMaxC);
     ch |= clampField(p.recovery_done_c, 0.05, 2.0);
+    ch |= clampField(p.recovery_wide_c, 0.5, 5.0);
     ch |= clampField<uint16_t>(p.preheat_min, 0, 360);
     ch |= clampField<uint16_t>(p.arrival_force_min, 0, 240);
     ch |= clampField(p.arrival_stop_c, 0.5, 10.0);
@@ -92,9 +93,9 @@ bool sanitize(ControlParams& p) {
     ch |= clampField(p.room_offset_c, -5.0, 5.0);
     if (p.u_min >= p.u_cont) { p.u_min = 0.03; p.u_cont = 0.90; ch = true; }
     if (p.t_valid_min_c >= p.t_valid_max_c) { p.t_valid_min_c = -20.0; p.t_valid_max_c = 50.0; ch = true; }
-    if (static_cast<uint8_t>(p.recovery_schedule) > 1) { p.recovery_schedule = Recovery::Efficient; ch = true; }
-    if (static_cast<uint8_t>(p.recovery_user) > 1) { p.recovery_user = Recovery::Fast; ch = true; }
-    if (static_cast<uint8_t>(p.recovery_arrival) > 1) { p.recovery_arrival = Recovery::Efficient; ch = true; }
+    if (static_cast<uint8_t>(p.recovery_schedule) > 2) { p.recovery_schedule = Recovery::Balanced; ch = true; }
+    if (static_cast<uint8_t>(p.recovery_user) > 2) { p.recovery_user = Recovery::Balanced; ch = true; }
+    if (static_cast<uint8_t>(p.recovery_arrival) > 2) { p.recovery_arrival = Recovery::Balanced; ch = true; }
     if (static_cast<uint8_t>(p.fail_policy) > 1) { p.fail_policy = FailPolicy::Limp; ch = true; }
     if (static_cast<uint8_t>(p.algo) > 2) { p.algo = Algo::Pulse; ch = true; }
     return ch;

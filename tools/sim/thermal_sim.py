@@ -166,6 +166,7 @@ class TermoMade:
 
     def __init__(self, pid, mod, efficient_recovery=False):
         self.pid, self.mod, self.eff = pid, mod, efficient_recovery
+        self.wide = 1.5   # BALANCED threshold, C (recovery_wide_c)
         self.on = False
         self.t_state = 1e9
         self.u = 0.0
@@ -178,7 +179,15 @@ class TermoMade:
         self.last_sp = sp
         if self.recovering and sp - t_meas <= 0.3:
             self.recovering = False
-        u_max = self.mod.uc if (self.eff and self.recovering) else 1.0
+        # recovery styles: False = FAST (no cap), True = EFFICIENT (pulses only, u <= uc),
+        # "bal" = BALANCED (valve may stay open while more than `wide` C below the setpoint,
+        # pulses only once closer). Mirrors tmc::Recovery in the firmware.
+        if not self.recovering or not self.eff:
+            u_max = 1.0
+        elif self.eff == "bal" and sp - t_meas > self.wide:
+            u_max = 1.0
+        else:
+            u_max = self.mod.uc
         self.u = u = self.pid.update(sp, t_meas, dt, u_max)
         self.t_state += dt
         on_t, off_t = self.mod.targets(u)

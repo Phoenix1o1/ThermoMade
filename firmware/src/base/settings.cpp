@@ -6,7 +6,7 @@
 
 namespace {
 constexpr uint32_t kMagic = 0x544D5331;   // "TMS1"
-constexpr uint16_t kVersion = 3;          // bump on any layout change of Settings (2: arrival, auto-brightness)
+constexpr uint16_t kVersion = 4;          // bump on any layout change of Settings (2: arrival, auto-brightness)
 
 template <typename T>
 struct Blob {

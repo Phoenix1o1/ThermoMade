@@ -38,6 +38,7 @@ try:
         inp.fill("0.8")
         inp.dispatch_event("change")
         pg.click("text=Impostazioni")
+        pg.select_option("#prof", "0")
         pg.fill("#sd", "07:00")
         pg.click("text=Applica orario")
         pg.click("text=Sensori")
@@ -58,7 +59,7 @@ try:
     log = json.load(urllib.request.urlopen(U + "/_log"))
     sent = [(p, q.get("c") or q.get("name") or "upload") for p, q in log]
     for want in [("/api/cmd", "time"), ("/api/cmd", "sp"), ("/api/cmd", "mode"), ("/api/cmd", "arrive"),
-                 ("/api/set", "kp"), ("/api/cmd", "sched"), ("/api/cmd", "pair"), ("/api/update", "upload")]:
+                 ("/api/set", "kp"), ("/api/cmd", "sched"), ("/api/cmd", "profile"), ("/api/cmd", "pair"), ("/api/update", "upload")]:
         assert want in sent, f"missing request {want}; got {sent}"
     assert not errs, errs
     print("web page test OK:", len(log), "requests")

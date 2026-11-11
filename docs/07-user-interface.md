@@ -115,7 +115,7 @@ Console equivalent: `time 2026-11-09 21:30`.
 | Notte | `sp_night` | 18.5 °C | 5–25 / 0.5 |
 | Via / antigelo | `sp_away` | 7.0 °C | 5–12 / 0.5 (also used in SPENTO) |
 | ARRIVO: durata forzata | `arrival_force_min` | 60 min | 0–240 / 15 (0 = ARRIVO only switches to AUTO) |
-| ARRIVO: stop a target − | `arrival_stop_c` | 2.0 °C | 0.5–10 / 0.5 |
+| Profilo riscaldamento | the three `recovery_*` | BILANCIATO | ECO / BILANCIATO / PRESTAZIONI ([04 §5.0](04-control-algorithm.md)) |
 
 ### 4 ORARIO — schedule (AUTO)
 
@@ -168,9 +168,8 @@ are clamped. **Change these only if you know why**; `RIPRISTINO DI FABBRICA` res
 | `preheat_min` | 60 min | 0–360 | 15 | Morning preheat in AUTO |
 | `arrival_force_min` | 60 min | 0–240 | 15 | ARRIVO forced heating |
 | `arrival_stop_c` | 2.0 °C | 0.5–10 | 0.5 | ARRIVO stops forcing within this of the setpoint |
-| `recovery_schedule` | 0 eff | 0/1 | — | Night → Comfort: 0 = pulses only, 1 = continuous allowed |
-| `recovery_user` | 1 fast | 0/1 | — | After −/+ or a manual mode change |
-| `recovery_arrival` | 0 eff | 0/1 | — | After ARRIVO's forced hour / leaving VIA or SPENTO |
+| `recovery_schedule` / `recovery_user` / `recovery_arrival` | 2 bal | 0–2 | — | Warm-up style after a schedule rise / a manual change / arrival: 0 eco (pulses only), 1 performance, 2 balanced. Normally set together by the profile |
+| `recovery_wide_c` | 1.5 °C | 0.5–5 | 0.5 | Balanced: "far from the setpoint" |
 | `recovery_done_c` | 0.3 °C | 0.05–2 | 0.1 | Recovery ends this close to the setpoint |
 | `on_min_s` | 180 s | 60–900 | 10 | Minimum ON = circuit fill time |
 | `off_min_s` | 300 s | 180–3600 | 10 | Minimum OFF, absolute (valve protection) |

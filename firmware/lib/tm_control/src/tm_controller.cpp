@@ -209,7 +209,11 @@ bool Controller::update(const ControllerInputs& in) {
     have_last_sp_ = true;
     last_sp_ = r.sp;
     if (recovering_ && have_t && r.sp - T <= p_.recovery_done_c) recovering_ = false;
-    const double u_max = (recovering_ && recovery_ == Recovery::Efficient) ? crossoverDuty(p_) : 1.0;
+    double u_max = 1.0;
+    if (recovering_ && recovery_ != Recovery::Fast) {
+        const bool far = have_t && r.sp - T > p_.recovery_wide_c;
+        if (recovery_ == Recovery::Efficient || !far) u_max = crossoverDuty(p_);   // pulses only
+    }
 
     swapBand(r.sp);
 

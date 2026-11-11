@@ -99,7 +99,7 @@ void status() {
                   f.offset_ready ? ", in fusion" : "", f.disagree ? "  DISAGREE" : "");
     Serial.printf("pi     u %.4f  P %.4f  I %.4f  D %.4f%s%s  algo %s\n", st.u, st.p, st.i, st.d,
                   st.coast ? "  coast" : "",
-                  st.recovering ? (st.recovery == tmc::Recovery::Efficient ? "  recovery-eff" : "  recovery-fast") : "",
+                  st.recovering ? (st.recovery == tmc::Recovery::Efficient ? "  recovery-eff" : (st.recovery == tmc::Recovery::Balanced ? "  recovery-bal" : "  recovery-fast")) : "",
                   st.algo_active == tmc::Algo::Classic ? "CLASSIC" : "PULSE");
     Serial.printf("valve  %s (%s)  next %ld s  lockout %lu s  relay %s%s\n", st.valve_open ? "OPEN" : "closed",
                   tmc::toString(st.reason), st.next_action_s == UINT32_MAX ? -1L : static_cast<long>(st.next_action_s),

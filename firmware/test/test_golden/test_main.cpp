@@ -18,7 +18,8 @@ static void runScenario(const GoldenScenario& sc, uint32_t now0) {
     p.sp_comfort = 20.0;
     p.sp_night = sc.schedule ? sc.sp_night : 20.0;
     p.preheat_min = static_cast<uint16_t>(sc.preheat_min);
-    p.recovery_schedule = sc.efficient ? Recovery::Efficient : Recovery::Fast;
+    p.recovery_schedule = static_cast<Recovery>(sc.recovery);
+    p.recovery_user = Recovery::Fast;
     p.offset_min_learn_s = 1e9;        // no base sensor in the simulator
     Controller c;
     WeekSchedule ws = WeekSchedule::makeDefault();   // Comfort 06:30-22:30

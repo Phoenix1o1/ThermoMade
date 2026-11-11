@@ -17,7 +17,7 @@ if [ $quick = 0 ]; then
   step "no warnings in our code (base)" bash -c "! (touch src/base/main.cpp; pio run -e base_cyd 2>&1 | grep -E '(src|lib/tm_)[^ ]*: warning')"
 fi
 cd "$repo"
-step "golden vectors match the simulator" bash -c "cd tools/sim && python3 gen_golden.py ../../firmware/test/test_golden/golden_data.h >/dev/null && cd ../.. && git diff --exit-code --stat firmware/test/test_golden/golden_data.h"
+step "golden vectors match the simulator" bash -c "cd tools/sim && python3 gen_golden.py $tmp/golden.h >/dev/null && diff -q $tmp/golden.h ../../firmware/test/test_golden/golden_data.h"
 if [ $quick = 0 ]; then step "screens render (ui_preview)" tools/ui_preview/build.sh "$tmp/ui"; fi
 if python3 -c "import playwright" 2>/dev/null; then step "web page in a browser (mock API)" python3 tools/web_mock/test_page.py
 else echo "SKIP  web page test (pip install playwright && playwright install chromium)"; fi

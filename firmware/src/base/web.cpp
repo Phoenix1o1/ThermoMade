@@ -95,6 +95,13 @@ void handleStatus(AsyncWebServerRequest* rq) {
         if (d0.slot[k].period == tmc::Period::Night && d0.slot[k].start_min > day && night < 0) night = d0.slot[k].start_min;
     o->printf("\"sched_day\":%d,\"sched_night\":%d,\"scr_timeout\":%u,\"scr_max\":%u,\"scr_min\":%u,\"scr_auto\":%u,",
               day, night, s.cfg.screen_timeout_s, s.cfg.brightness, s.cfg.brightness_min, s.cfg.auto_brightness);
+    {   // heating profile: 0 eco, 1 balanced, 2 performance, -1 mixed
+        const tmc::ControlParams& p = s.cfg.params;
+        int prof = -1;
+        if (p.recovery_schedule == p.recovery_user && p.recovery_user == p.recovery_arrival)
+            prof = p.recovery_schedule == tmc::Recovery::Efficient ? 0 : (p.recovery_schedule == tmc::Recovery::Balanced ? 1 : 2);
+        o->printf("\"profile\":%d,", prof);
+    }
     o->printf("\"pairing\":%s,", s.pairing_open ? "true" : "false");
     o->printf("\"fw\":\"%d.%d\",\"uptime_s\":%lu,\"reset\":\"%s\"}", TM_FW_MAJOR, TM_FW_MINOR,
               static_cast<unsigned long>(st.uptime_ms / 1000u), s.reset_reason);
@@ -136,6 +143,12 @@ void handleCmd(AsyncWebServerRequest* rq) {
     else if (!strcmp(c, "boost") && hv && v >= 1 && v <= 240) ok = post(ReqType::StartBoost, static_cast<int32_t>(v));
     else if (!strcmp(c, "stop")) ok = post(ReqType::StopBoost);
     else if (!strcmp(c, "arrive")) ok = post(ReqType::Arrive);
+    else if (!strcmp(c, "profile") && hv && v >= 0 && v <= 2) {   // sets the three recovery_* parameters together
+        static const int kRec[3] = {0, 2, 1};
+        ok = true;
+        for (const char* n : {"recovery_schedule", "recovery_user", "recovery_arrival"})
+            ok = post(ReqType::SetParam, findParam(n), kRec[static_cast<int>(v)]) && ok;
+    }
     else if (!strcmp(c, "save")) ok = post(ReqType::SaveNow);
     else if (!strcmp(c, "pair")) { radio_base::openPairing(); ok = true; }   // 60 s window, like the touch screen
     else if (!strcmp(c, "time") && hv && v > 0 && v < 4294967295.0 && tmu::plausibleUnix(static_cast<uint32_t>(v)))

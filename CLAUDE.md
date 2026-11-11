@@ -56,7 +56,8 @@ ON_MIN 180 s · OFF_MIN 300 s · tick 30 s · EMA τ 120 s · KP 0.6/°C · TI 1
 I_BAND 1.0 °C (+ coast after setpoint decrease) · U_MIN 0.03 · U_CONT 0.90 · uc = 0.375 ·
 STALE 300 s · I0 0.15 · MAX_CYCLES_PER_HOUR 8 · W_ROOM 0.7 · TAU_OFF 6 h ·
 Comfort 20.0 / Night 18.5 / Away 7.0 °C · schedule Comfort 06:30–22:30 ·
-recovery EFFICIENT (u ≤ uc) for scheduled rises and after arrival, FAST for user +/− ·
+heating profile ECO / BALANCED (default) / PERFORMANCE sets the three recovery_* params: BALANCED =
+valve may stay open when > 1.5 °C below the setpoint, pulses only (u ≤ uc) when closer (docs/04 §5.0) ·
 ARRIVO = AUTO + forced open 60 min (stop at sp − 2 °C), then efficient (docs/04 §5.1).
 
 Modulator: u ≤ uc → ON = ON_MIN, OFF = ON_MIN·(1−u)/u; uc < u < U_CONT → OFF = OFF_MIN,

@@ -23,6 +23,7 @@
 | D13 | Neutral in the 503 box | **Andrea will bring neutral to the box** (2026-11-12) |
 | D18 | Relay module input | **Selectable H/L module: set the jumper to H** (active-HIGH), `TM_RELAY_ACTIVE_HIGH=1` as committed, 10 kΩ pull-down on IN |
 | D29 | Room sensor part | SHT31-D is fine (build `node_sht31`); DS3231 confirmed |
+| D30 | Warm-up style | **Selectable profile ECO / BALANCED / PERFORMANCE, default BALANCED** (far from the setpoint: valve open; close: pulses). Costs ~7 billed hours more than ECO per cold arrival, same on ordinary days ([04 §5.0](04-control-algorithm.md)) |
 | D24 | Light sensing | **CYD's own LDR** (GPIO 34), sampled with the screen dark, self-learning scale → auto-brightness + log. No extra sensor (a BH1750 on the room node only if calibrated lux is ever needed) |
 | — | Extra requirements | Night setback schedule, Android app for the parents, screen off after 30 s, 2-part OpenSCAD box on the 503 box with PSU inside |
 
@@ -139,8 +140,8 @@ Fixed in base v0.2 / node v0.1 (48 native tests):
 
 Open (not fixed yet):
 
-- EFFICIENT recovery cap has no timeout: on a day needing > 37.5 % duty the room would stay
-  below the setpoint. Add a time limit or lift it when the temperature stops rising.
+- Recovery cap: with BALANCED (default) the cap only applies within 1.5 °C of the setpoint; in ECO
+  it still has no time limit (by choice: ECO means pulses only).
 - `forgetAll()` is called from the UI task while the radio task runs (move to the radio queue).
 - Node: worst-case loop time ~4.5 s vs the 5 s watchdog (DHT22 retry + rescan). Spread the rescan.
 - Node RTC time is accepted without a jump limit once the manual time is older than 24 h.

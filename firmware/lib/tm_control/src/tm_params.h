@@ -35,13 +35,14 @@ struct ControlParams {
     bool antifreeze_in_off = true;  // mode OFF still protects against freezing
 
     // --- recovery after setpoint increases ---
-    Recovery recovery_schedule = Recovery::Efficient;  // Night -> Comfort
-    Recovery recovery_user = Recovery::Fast;           // +/- and manual modes
-    Recovery recovery_arrival = Recovery::Efficient;   // Away/Off -> heating (after the ARRIVO forced start)
+    Recovery recovery_schedule = Recovery::Balanced;  // Night -> Comfort
+    Recovery recovery_user = Recovery::Balanced;           // +/- and manual modes
+    Recovery recovery_arrival = Recovery::Balanced;   // Away/Off -> heating (after the ARRIVO forced start)
     double recovery_done_c = 0.3;   // recovery ends when sp - T <= this
     uint16_t preheat_min = 60;      // start Comfort earlier (fixed until learned)
 
     // --- ARRIVO button (tools/sim/arrival_study.py, docs/04 §5) ---
+    double recovery_wide_c = 1.5;      // BALANCED: 'far from the setpoint' means more than this
     uint16_t arrival_force_min = 60;   // forced heating after arriving (0 = no forced start)
     double arrival_stop_c = 2.0;       // ...ends early once T >= setpoint - this
 

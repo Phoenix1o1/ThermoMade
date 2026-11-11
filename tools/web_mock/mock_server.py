@@ -16,7 +16,7 @@ ST = dict(t=19.6, t_room=19.55, rh=41.0, t_base=19.64, offset=1.38, sp=20.0, u=0
           waiting=False, limp=False, alarms=0, humidity=1, time_valid=False, unix=0, hh=0, mm=0,
           billed_s=2040, pulses=9, node=True, node_age_s=12, rssi=-61, light=37, sd=True, relay=True,
           sched_day=390, sched_night=1350, scr_timeout=30, scr_max=180, scr_min=12, scr_auto=1,
-          pairing=False, fw="0.3", uptime_s=11520, reset="power-on")
+          pairing=False, profile=1, fw="0.3", uptime_s=11520, reset="power-on")
 PARAMS = [dict(name="sp_comfort", value=20, unit="C", step=0.5, kind=0), dict(name="kp", value=0.6, unit="1/C", step=0.05, kind=0),
           dict(name="arrival_force_min", value=60, unit="min", step=15, kind=0),
           dict(name="recovery_arrival", value=0, unit="0=eff 1=fast", step=1, kind=1)]
@@ -80,6 +80,8 @@ class H(BaseHTTPRequestHandler):
                 ST.update(sched_day=int(v), sched_night=int(float(q["v2"])))
             elif c == "screen":
                 ST.update(scr_timeout=int(v))
+            elif c == "profile":
+                ST["profile"] = int(v)
             elif c == "pair":
                 ST["pairing"] = True
             elif c != "save":

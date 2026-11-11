@@ -268,7 +268,7 @@ void buildStatus(const Snapshot& s, Row* r) {
     snprintf(r[0].a, sizeof r[0].a, "T %.2f %s  stanza %.2f  CYD %.2f", f.t_c, tmc::toString(f.src), f.t_room,
              f.t_base_corr);
     snprintf(r[0].b, sizeof r[0].b, "sp %.2f u %.3f P %.3f I %.3f%s%s", st.sp, st.u, st.p, st.i, st.coast ? " cst" : "",
-             st.recovering ? (st.recovery == tmc::Recovery::Efficient ? " eff" : " fast") : "");
+             st.recovering ? (st.recovery == tmc::Recovery::Efficient ? " eff" : (st.recovery == tmc::Recovery::Balanced ? " bal" : " fast")) : "");
     char nx[12] = "--";
     if (st.next_action_s != UINT32_MAX) snprintf(nx, sizeof nx, "%lus", static_cast<unsigned long>(st.next_action_s));
     snprintf(r[1].a, sizeof r[1].a, "valvola %s (%s)  prossima %s", st.valve_open ? "APERTA" : "chiusa",
@@ -320,12 +320,35 @@ void buildTime(const Snapshot& s, Row* r) {
     buttons(r[4], "IMPOSTA QUESTA ORA", "", 1);
 }
 
+// Heating profile = the three recovery_* parameters set together.
+// 0 ECO (Efficient), 1 BALANCED, 2 PERFORMANCE (Fast), -1 mixed (set by hand on AVANZATE).
+constexpr int kProfRecovery[3] = {0, 2, 1};   // tmc::Recovery value per profile
+int g_prof_pending = -1;
+tmu::Deadline g_prof_until;
+int profileOf(const Snapshot& s) {
+    if (active(g_prof_until)) return g_prof_pending;
+    const tmc::ControlParams& p = s.cfg.params;
+    if (p.recovery_schedule != p.recovery_user || p.recovery_user != p.recovery_arrival) return -1;
+    for (int k = 0; k < 3; ++k)
+        if (static_cast<int>(p.recovery_schedule) == kProfRecovery[k]) return k;
+    return -1;
+}
+void setProfile(int k) {
+    for (const char* n : {"recovery_schedule", "recovery_user", "recovery_arrival"}) post(ReqType::SetParam, pidx(n), kProfRecovery[k]);
+    g_prof_pending = k;
+    g_prof_until.arm(millis(), 2500);
+}
+
 void buildTemps(const Snapshot& s, Row* r) {
     adjustRow(r[0], s, "Giorno (comfort)", pidx("sp_comfort"));
     adjustRow(r[1], s, "Notte", pidx("sp_night"));
     adjustRow(r[2], s, "Via / antigelo (max 12)", pidx("sp_away"));
     adjustRow(r[3], s, "ARRIVO: durata forzata", pidx("arrival_force_min"));
-    adjustRow(r[4], s, "ARRIVO: stop a target -", pidx("arrival_stop_c"));
+    r[4].kind = Kind::Adjust;   // one choice that sets the three recovery_* parameters together
+    snprintf(r[4].a, sizeof r[4].a, "Profilo riscaldamento");
+    static const char* kProf[4] = {"ECO (solo impulsi)", "BILANCIATO", "PRESTAZIONI", "personalizzato"};
+    const int pr = profileOf(s);
+    snprintf(r[4].b, sizeof r[4].b, "%s", kProf[pr < 0 ? 3 : pr]);
 }
 
 void buildSched(const Snapshot& s, Row* r) {
@@ -496,7 +519,13 @@ void act(int row, int code, bool repeat, const Snapshot& s) {
             break;
         case kTemps: {
             static const char* kNames[5] = {"sp_comfort", "sp_night", "sp_away", "arrival_force_min", "arrival_stop_c"};
-            if (adj) adjustParam(s, pidx(kNames[row]), code);
+            if (adj && row == 4) {
+                int k = profileOf(s);
+                k = k < 0 ? 1 : (k + (code > 0 ? 1 : 2)) % 3;
+                setProfile(k);
+            } else if (adj) {
+                adjustParam(s, pidx(kNames[row]), code);
+            }
             break;
         }
         case kSched:
@@ -643,6 +672,7 @@ void open(lgfx::LGFX_Device* lcd, const Snapshot& s) {
     g_confirm_until.clear();
     g_note_until.clear();
     g_sc.until.clear();
+    g_prof_until.clear();
     enterPage(s);
 }
 

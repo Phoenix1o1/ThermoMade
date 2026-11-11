@@ -57,6 +57,11 @@ pre{white-space:pre-wrap;font-size:13px;color:var(--dim);margin:0}
 </div></div>
 
 <details id="cfg"><summary>Impostazioni</summary>
+ <label>Profilo riscaldamento <select id="prof" onchange="cmd('profile',this.value)" style="width:150px">
+  <option value="0">Eco</option><option value="1">Bilanciato</option><option value="2">Prestazioni</option>
+  <option value="-1" disabled>personalizzato</option></select></label>
+ <p class="dim" style="margin:0 0 8px"><b>Eco</b>: solo impulsi, costa meno, scalda piano. <b>Bilanciato</b>: valvola aperta se
+ mancano più di 1,5 °C, impulsi quando è vicino. <b>Prestazioni</b>: il più veloce, costa di più.</p>
  <label>Giorno (comfort) dalle <input type="time" id="sd"></label>
  <label>Notte dalle <input type="time" id="sn"></label>
  <div class="row"><button onclick="sched()">Applica orario a tutti i giorni</button></div>
@@ -137,6 +142,7 @@ nodo ${s.node?s.node_age_s+' s fa, '+s.rssi+' dBm':'NON accoppiato'}  SD ${s.sd?
 fw ${s.fw}  acceso da ${Math.floor(s.uptime_s/3600)}h${Math.floor(s.uptime_s%3600/60)}m  reset ${s.reset}`;
  $('nodeinfo').textContent=s.node?('Sensore stanza: '+(s.t_room==null?'nessun dato':s.t_room.toFixed(2)+' °C')+', ultimo dato '+s.node_age_s+' s fa, segnale '+s.rssi+' dBm'):'Nessun sensore accoppiato';
  $('pair').className=s.pairing?'on':'';$('pair').textContent=s.pairing?'Accoppiamento aperto…':'Accoppia sensore (60 s)';
+ if(document.activeElement!=$('prof'))$('prof').value=s.profile;
  if(!cfgFilled){cfgFilled=true;if(s.sched_day>=0)$('sd').value=hm(s.sched_day);if(s.sched_night>=0)$('sn').value=hm(s.sched_night);
   $('st').value=s.scr_timeout;$('sx').value=s.scr_max;$('sm').value=s.scr_min;$('sa').value=s.scr_auto}
 }

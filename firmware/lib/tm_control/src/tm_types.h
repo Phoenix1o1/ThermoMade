@@ -20,7 +20,12 @@ enum class Algo : uint8_t { Pulse = 0, Classic = 1, AlternateDays = 2 };
 enum class FailPolicy : uint8_t { Limp = 0, FailOff = 1 };
 
 // How to recover after a setpoint increase (docs/04 §5).
-enum class Recovery : uint8_t { Efficient = 0, Fast = 1 };
+// How a setpoint increase is recovered (docs/04 §5):
+//  Efficient = pulses only (u <= uc), cheapest per billed minute, slowest          -> profile ECO
+//  Balanced  = valve may stay open while far (> recovery_wide_c) below the setpoint,
+//              pulses only once closer                                            -> profile BALANCED
+//  Fast      = no cap, the PI may lengthen pulses / stay open until the setpoint  -> profile PERFORMANCE
+enum class Recovery : uint8_t { Efficient = 0, Fast = 1, Balanced = 2 };
 
 // Which sensors produced the control temperature.
 enum class TempSource : uint8_t { None = 0, Fused = 1, RoomOnly = 2, BaseOnly = 3 };

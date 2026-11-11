@@ -42,6 +42,10 @@ def strategy(name, i0):
         return tm(False)
     if name == "efficient":
         return tm(True)
+    if name == "balanced":
+        return tm("bal")
+    if name == "force_bal:60":
+        return ts.ForcedStart(tm("bal"), 3600, sp_before=SP_AWAY)
     kind, rest = name.split(":")
     if kind == "force_eff":
         return ts.ForcedStart(tm(True), int(rest) * 60, sp_before=SP_AWAY)

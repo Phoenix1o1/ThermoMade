@@ -184,6 +184,32 @@ cost, go to 17 °C and accept ≈ +20 %. Real data will tell: log both for a wee
 
 The **BOOST** button is a user override (timed continuous ON) and does not touch `I`.
 
+### 5.0 Heating profiles: ECO / BALANCED / PERFORMANCE (2026-11-12, base v0.5)
+
+One choice (touch screen page TEMPERATURE, web page "Profilo riscaldamento") sets how every
+warm-up is done, i.e. the three `recovery_*` parameters together:
+
+| Profile | Rule during a warm-up | `recovery_*` |
+|---|---|---|
+| **ECO** | Pulses only (valve open at most 3 min in 8), however far the room is | 0 |
+| **BALANCED (default)** | More than `recovery_wide_c` (1.5 °C) below the setpoint: the valve may stay open. Closer than that: pulses only | 2 |
+| **PERFORMANCE** | No limit: the PI may also lengthen the pulses near the setpoint | 1 |
+
+Simulated cold arrival (house 7 °C, outdoor −2 °C, `arrival_study.py`):
+
+| Profile | Reaches 16 °C / 18 °C after | Billed minutes, first 48 h |
+|---|---|---|
+| ECO (+ ARRIVO's forced hour) | 13.8 h / 18.6 h | 780 |
+| BALANCED | 8.9 h / 13.0 h | 1203 (+423) |
+| PERFORMANCE | 8.9 h / 13.0 h | 1261 (+481) |
+
+BALANCED warms a cold house as fast as PERFORMANCE and saves about an hour of billed time on the
+last 1.5 °C; compared with ECO it costs about **7 billed hours per cold arrival** and is ~5 h
+faster. The morning rise (18.5 → 20 °C = 1.5 °C) stays pulse-only in BALANCED, so ordinary days
+cost the same as ECO. With BALANCED or PERFORMANCE, ARRIVO's forced hour changes nothing (the
+valve is open anyway); it matters in ECO. The three parameters can still be set one by one on
+AVANZATE (the profile then shows "personalizzato").
+
 ### 5.1 ARRIVO: arriving at the cold house (decided 2026-11-09 with `tools/sim/arrival_study.py`)
 
 The house is kept at 7 °C (VIA). On arrival the family presses **ARRIVO** (the VIA button turns
@@ -268,7 +294,8 @@ for summer or if you prefer. Default = LIMP, because an unattended mountain hous
 | `MAX_CYCLES_PER_HOUR` | 8 | 4–12 | Wear guard |
 | `SP_COMFORT` / `SP_NIGHT` / `SP_AWAY` | 20.0 / 18.5 / 7.0 °C | 5–25 | Setpoints are always clamped to 5–25 °C. Night 18.5 trade-off in §5 |
 | `I_BAND` | 1.0 °C | 0.3–3 | Integrate only when abs(e) ≤ I_BAND |
-| `RECOVERY_SCHED` / `RECOVERY_ARRIVAL` / `RECOVERY_USER` | EFFICIENT / **EFFICIENT** / FAST | — | §5. Arrival changed from FAST on 2026-11-09 (§5.1) |
+| `RECOVERY_SCHED` / `RECOVERY_ARRIVAL` / `RECOVERY_USER` | all **BALANCED** | 0 eco, 1 perf, 2 bal | Set together by the heating profile (§5.0) |
+| `RECOVERY_WIDE_C` | 1.5 °C | 0.5–5 | BALANCED: valve may stay open when further than this below the setpoint |
 | `ARRIVAL_FORCE_MIN` | 60 min | 0–240 | ARRIVO forced heating; 0 = ARRIVO only switches to AUTO (§5.1) |
 | `ARRIVAL_STOP_C` | 2.0 °C | 0.5–10 | Forced heating ends once T ≥ setpoint − this |
 | `PREHEAT_MAX` | 3 h | 0–6 h | Optimum-start limit. Fixed 1 h until learned |

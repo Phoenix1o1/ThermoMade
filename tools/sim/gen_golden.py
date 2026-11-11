@@ -76,6 +76,7 @@ SCENARIOS = [
     run("cold_arrival", 1.0, T_out_mean=-2.0, T0_air=8.0, T0_mass=8.0),
     run("night_eff_preheat", 2.5, schedule=dict(sp_night=17.0, preheat_h=2.0), eff=True, T_out_mean=-2.0),
     run("mild_fast_night185", 1.5, schedule=dict(sp_night=18.5), eff=False, T_out_mean=8.0),
+    run("night_bal_17", 2.5, schedule=dict(sp_night=17.0, preheat_h=1.0), eff="bal", T_out_mean=-2.0),
     run_arrival("arrival_cold", 1.0, T_out_mean=-2.0, T0_air=9.5, T0_mass=9.0),
     run_arrival("arrival_warmish", 0.5, T_out_mean=-2.0, T0_air=16.5, T0_mass=16.0),
 ]
@@ -88,7 +89,7 @@ def main(out):
         f.write("#pragma once\n#include <cstdint>\n\n")
         f.write("struct GoldenRow { int16_t sp100; int16_t meas100; double u; uint8_t open; };\n")
         f.write("struct GoldenScenario { const char* name; const GoldenRow* rows; int n; "
-                "bool schedule; double sp_night; int preheat_min; bool efficient; int arrive_tick; };\n\n")
+                "bool schedule; double sp_night; int preheat_min; int recovery; int arrive_tick; };\n\n")
         for name, rows, sch in SCENARIOS:
             f.write(f"static const GoldenRow g_{name}[] = {{\n")
             for sp, meas, u, on in rows:
@@ -96,14 +97,14 @@ def main(out):
             f.write("};\n\n")
         f.write("static const GoldenScenario g_scenarios[] = {\n")
         for name, rows, sch in SCENARIOS:
-            eff = "true" if name.startswith("night_eff") else "false"
+            eff = "0" if name.startswith("night_eff") else ("2" if name.startswith("night_bal") else "1")  # tmc::Recovery
             if sch == "arrival":
-                f.write(f'  {{"{name}", g_{name}, {len(rows)}, false, 0.0, 0, false, 1}},\n')
+                f.write(f'  {{"{name}", g_{name}, {len(rows)}, false, 0.0, 0, 0, 1}},\n')
             elif sch:
                 f.write(f'  {{"{name}", g_{name}, {len(rows)}, true, {sch["sp_night"]}, '
                         f'{int(round(sch.get("preheat_h", 0.0) * 60))}, {eff}, -1}},\n')
             else:
-                f.write(f'  {{"{name}", g_{name}, {len(rows)}, false, 0.0, 0, false, -1}},\n')
+                f.write(f'  {{"{name}", g_{name}, {len(rows)}, false, 0.0, 0, 0, -1}},\n')
         f.write("};\n")
     total = sum(len(r) for _, r, _ in SCENARIOS)
     opens = sum(sum(1 for i in range(1, len(r)) if r[i][3] and not r[i-1][3]) for _, r, _ in SCENARIOS)
