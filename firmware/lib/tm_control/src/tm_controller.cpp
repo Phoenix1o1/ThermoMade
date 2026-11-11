@@ -24,6 +24,7 @@ void Controller::begin(uint32_t now_ms, const ControlParams& params, const WeekS
     i_band_[0] = ps.i_comfort;
     i_band_[1] = ps.i_away;
     fusion_.restoreOffset(ps.base_offset, ps.offset_learned_s);
+    restore_ = ps;
     band_away_ = false;
     pid_.setI(learnedI(false));
     fsm_.begin(now_ms, start_unlocked);
@@ -290,7 +291,15 @@ bool Controller::update(const ControllerInputs& in) {
 
     // ---- counters ----
     if (in.wall.valid) {
-        if (!have_day_) { have_day_ = true; day_ = in.wall.day_number; }
+        if (!have_day_) {
+            have_day_ = true;
+            day_ = in.wall.day_number;
+            if (restore_.counters_day != 0 && restore_.counters_day == day_) {   // same day as before the reboot
+                billed_ms_today_ += static_cast<uint64_t>(restore_.billed_today_s) * 1000u;
+                pulses_today_ += restore_.pulses_today;
+            }
+            restore_.counters_day = 0;
+        }
         else if (in.wall.day_number != day_) {
             pushEvent(EventType::DayRollover, 0, 0, static_cast<float>(static_cast<double>(billed_ms_today_) / 60000.0),
                       static_cast<float>(pulses_today_));
@@ -391,6 +400,14 @@ PersistentState Controller::persistent() const {
     ps.i_away = band_away_ ? pid_.i() : i_band_[1];
     ps.base_offset = fusion_.offset();
     ps.offset_learned_s = fusion_.offsetLearnedS();
+    if (have_day_) {
+        ps.counters_day = day_;
+        ps.billed_today_s = static_cast<uint32_t>(billed_ms_today_ / 1000u);
+        ps.pulses_today = pulses_today_;
+    } else {
+        ps = PersistentState{ps.i_comfort, ps.i_away, ps.base_offset, ps.offset_learned_s,
+                             restore_.counters_day, restore_.billed_today_s, restore_.pulses_today};   // date not known yet: keep what was stored
+    }
     return ps;
 }
 

@@ -30,8 +30,9 @@ x = u, y = temperature), `mode` (a = new, b = previous), `setpoint` (x = value),
 the day that ended), `boot`, and free `text` lines (boot reason, time set, schedule changed,
 learning reset, restart).
 
-Note: the daily counters restart at 0 after a reboot. The SD files are the source of truth for
-totals.
+Note: the daily counters survive a reboot on the same day (saved every 30 min with the learned
+state, so up to 30 min can be missing after a power cut). The SD files are the source of truth
+for totals.
 
 ### Daily summary (`/log/summary.csv`, one row per day) — planned
 

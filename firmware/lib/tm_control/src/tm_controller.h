@@ -28,6 +28,10 @@ struct PersistentState {
     double i_away = -1.0;         // learned duty, antifreeze band
     double base_offset = 0.0;
     double offset_learned_s = 0.0;
+    // today's counters, so a reboot does not zero them (valid only for the same calendar day)
+    uint32_t counters_day = 0;    // WallTime::day_number they belong to, 0 = none
+    uint32_t billed_today_s = 0;
+    uint32_t pulses_today = 0;
 };
 
 enum class EventType : uint8_t {
@@ -184,6 +188,7 @@ private:
     uint32_t pulses_today_ = 0;
     uint32_t last_opens_total_ = 0;
     bool have_day_ = false;
+    PersistentState restore_;        // counters from before the reboot, applied once the date is known
     uint32_t day_ = 0;
     uint64_t open_streak_ms_ = 0;
     TempSource last_src_ = TempSource::None;

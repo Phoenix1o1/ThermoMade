@@ -592,6 +592,28 @@ static void test_fusion_stale_latches_and_colder_wins() {
     TEST_ASSERT_DOUBLE_WITHIN(0.2, 5.0, g.out().t_c);
 }
 
+// Today's billed time and pulse count survive a reboot on the same day, not into the next day.
+static void test_controller_counters_survive_reboot() {
+    Rig r;
+    r.now = (5u * 24u + 10u) * 3600u * 1000u;   // day 5, 10:00
+    r.c.begin(r.now, r.p, WeekSchedule::makeDefault(), PersistentState{}, Mode::Comfort, true);
+    for (int k = 0; k < 3600; ++k) r.step(18.0);                 // cold room: valve runs
+    const PersistentState ps = r.c.persistent();
+    TEST_ASSERT_TRUE(ps.billed_today_s > 600);
+    TEST_ASSERT_TRUE(ps.counters_day != 0);
+    Rig same;                                                    // reboot, same day
+    same.now = r.now;
+    same.c.begin(same.now, same.p, WeekSchedule::makeDefault(), ps, Mode::Comfort);
+    same.step(21.0);
+    TEST_ASSERT_EQUAL_UINT32(ps.billed_today_s, same.c.status().billed_today_s);
+    TEST_ASSERT_EQUAL_UINT32(ps.pulses_today, same.c.status().pulses_today);
+    Rig next;                                                    // reboot the day after
+    next.now = r.now + 24u * 3600u * 1000u;
+    next.c.begin(next.now, next.p, WeekSchedule::makeDefault(), ps, Mode::Comfort);
+    next.step(21.0);
+    TEST_ASSERT_EQUAL_UINT32(0, next.c.status().billed_today_s);
+}
+
 // The big one: random user actions, sensor dropouts, plant gating and params changes for 20 days.
 // Hard rules must hold: OFF_MIN never violated, ON_MIN only shortened by forced closes,
 // setpoint always in [5, 25], u always in [0, 1].
@@ -676,6 +698,7 @@ int main(int, char**) {
     RUN_TEST(test_controller_arrival_cancelled_by_mode);
     RUN_TEST(test_controller_boost_limits);
     RUN_TEST(test_fusion_stale_latches_and_colder_wins);
+    RUN_TEST(test_controller_counters_survive_reboot);
     RUN_TEST(test_controller_fuzz_hard_rules);
     return UNITY_END();
 }
