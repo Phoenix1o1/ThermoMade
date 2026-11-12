@@ -146,3 +146,12 @@ Open (not fixed yet):
 - Node: worst-case loop time ~4.5 s vs the 5 s watchdog (DHT22 retry + rescan). Spread the rescan.
 - Node RTC time is accepted without a jump limit once the manual time is older than 24 h.
 - Check task stack high-water marks during bring-up.
+
+## D31 — real house vs simulator (open, info from Andrea 2026-11-12)
+
+- Diesel boiler, supply water plausibly **80–90 °C** (radiators too hot to touch). Model uses 75 °C.
+- **2 large radiators + 1 in the bathroom.** One has a shoe rack in front (reduced output).
+  Andrea plans to add **fans to both** by winter (more output per radiator).
+- No measured warm-up time yet. Andrea's impression: the real house warms faster than the model.
+- Staged, not run: `tools/sim/fast_house_study.py` (hotter water, stronger radiators, lighter house).
+  Calibrate properly from the first real logs with `tools/analysis/tm_logs.py fit`.
